@@ -1,0 +1,4282 @@
+//////////////////////////////////////////////////////////////////////////////
+// Patch.txt
+// 게임서버의 패치내용 정리
+//                             			최종 업데이트 날자 : 2004년 05월 06일
+// Coder  : 송길섭(SaemSong)
+//          이상수(foguy)
+			황준일(b4nfter)
+			안준석(apple)
+
+//----------------------------------------------------------------------------
+// (SaemSong)
+★★★★★ 버그 수정시 다음과 같이 소스와 패치문서에 주석을 단다. ★★★★★
+//#BUGFIX_20040203_01
+	-소스가 한줄일 경우 수정된 소스 뒷 부분에
+	-수정된 소스가 길 경우 시작 부분과 끝 부분에 기입하여 어느 부분이 언제 어떤 문제로 수정
+		되었는지 파악하기 쉽도록 한다.
+//----------------------------------------------------------------------------
+
+
+- 2004.08.31 (b4nfter)
+	▩ 버그수정		(참조 : //#BUGFIX_20040831)
+
+	void gObjGuildWarEnd(LPGUILD_INFO lpGuild, LPGUILD_INFO lpTargetGuild)
+	{
+		...
+		...
+
+		if( lpTargetGuild != NULL )
+		{
+			lpTargetGuild->WarDeclareState	= 0;
+			lpTargetGuild->WarState			= 0;
+			//LogAdd("길드 전투 종료 메시지 : %s", lpTargetGuild->Name);
+			LPGUILD_INFO	lpTguild;
+			
+			if (lpGuild->lpTargetGuildNode != NULL) {		// -> MEMORY ACCESS VIOLATION, 수정
+				lpTguild = lpGuild->lpTargetGuildNode;
+				lpGuild->lpTargetGuildNode = NULL;
+				lpTguild->lpTargetGuildNode = NULL;
+			}
+		}
+		else 
+		{
+			lpGuild->lpTargetGuildNode = NULL;
+		}
+	}
+		
+
+- 2004.08.20 (b4nfter)
+	▩ 아이템 복사 방지 관련 - 인벤토리 초기화 버그
+		아래의 프로세스로 버그 발생 >>
+		1 . 조련사 클릭 (카오스 조합) -> Transaction 시작
+		2 . 타인의 개인상점 물품 보기 -> 아이템 복사 방지 : Inventory2 포인터 이므로 포인터 수정 후 Inventory2 초기화
+		3 . 조련사 종료 -> Transaction 종료 : Inventory2 의 초기화된 공간을 Inventory1 으로 복사
+
+		서버 수정한 내용 >> (#define ITEM_DUPLICATE_PREVENT_PATCH_BUGFIX_20040825 참조)
+		1 . gObjFixInventoryPointer() 에서 트랜잭션 중일 때 포인터 변환 금지
+		2 . 아이템 관련 요청 (아이템 줍기, 버리기, 개인상점 개설 등등) 에 트랜잭션 여부 확인 -> 트랜잭션 중에는 실패
+
+		클라이언트 수정한 내용 >>
+		1 . 조련사 인터페이스 일 때 카오스 조합이나 거래 처럼 모든 외부 인터페이스 ('D'키, 인벤토리 등등) 막음
+
+
+*** protocol.cpp 수정해야됨..... (소스세이프 잡혀 있음) (foguy)
+int GetNeedMoneyItemDurRepaire(CItem *DurItem, int RequestPos)
+{
+	int iMoney = 0;
+
+	int type = DurItem->m_Type;
+	float ItemDurability = (float)DurItem->m_Durability;
+
+	if( type == MAKE_ITEMNUM(13,10) )
+		return 0;
+
+	if( HasItemDurability(type) )
+	{	// 내구력을 가지고 있으면
+		float Durability;
+		float RepaireMoney = 0;	
+
+		Durability = DurItem->m_BaseDurability;
+
+		if( ItemDurability == Durability )
+			return 0;
+
+		//RepaireMoney = DurItem->m_SellMoney*GetRepairItemRate(type)/Durability;
+		//RepaireMoney = RepaireMoney*(Durability-ItemDurability);
+
+		float   persent = 1.f - (ItemDurability/Durability);
+
+		int sellmoney =  DurItem->m_BuyMoney/3;
+
+#ifdef DARKLORD_WORK
+		if( type == MAKE_ITEMNUM(13,4) || type == MAKE_ITEMNUM(13,5) )
+		{	// 다크스피릿, 다크호스 죽었을때 수리 비용 2배
+			sellmoney =  DurItem->m_BuyMoney;
+		}
+		else
+#endif
+		{
+			sellmoney =  DurItem->m_BuyMoney/3;
+		}
+
+- 2004.07.15 (foguy)
+	▩ 로그 wtf파일로 정리 
+	477	[%s][%s][%d]%d/%d Get   serial:%d [%s][%d][%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d] Set:[%d]
+	479	[%s][%s][%d]%d/%d Throw away Serial:%d [%s][%d][%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d] Set:[%d]
+	480	[%s][%s][%d]%d/%d Throw away (Drop) Serial:%d [%s][%d][%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d] Set:[%d]
+	485	[%s][%s] Shop(%d) Item Sell Money:%d %s:%d/%d/%d/%d/%d Dur:%d Ex:[%d,%d,%d,%d,%d,%d,%d] Set:[%d]
+	504	[%s][%s]SI[%d,%s,%d,%d,%d,%d]serial:[%d] dur:[%d] Ex:[%d,%d,%d,%d,%d,%d,%d] Set[%d]
+	506	[%s][%s] SW [%d,%s,%d,%d,%d,%d]serial:[%d] dur:[%d] Ex:[%d,%d,%d,%d,%d,%d,%d] Set:[%d]
+	538	[%s][%s](%d,%d,%d) Trade Item  Opposite :[%s][%s] (%d,%d,%d) (Item:%s/Serial:%d [%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d] Set:[%d]
+
+- 2004.07.07 (b4nfter)
+	▩ #BUGFIX_20040707_01
+		편지를 보낼 때 정확히 1000젠이 있으면 보내지면서 돈이 깍이지 않는다.
+
+- 2004.06.15 (SaemSong)
+	▩ #BUGFIX_20040615_01
+		길드 재 작업 중 길드마스터를 못 찾는 부분 버그 수정 
+
+- 2004.06.08 (foguy)
+  ▩ Item.txt 변경
+	- Type 15(법서) - 요구 통솔 추가
+	 Skill.txt 변경
+	- 요구 통솔 추가
+
+  ▩ gObjAttack 클래스 일부 분리(코드가 너무 길어서... 앞으로 더 줄일 계획임)
+	 - gObjBaseAttack 클래스 추가 : gObjAttack가 상속 받는다
+
+  ▩ CGuildClass 수정 (검색부분 수정)
+	- #define		MODIFY_GUILD_CLASS_20040608 참조
+
+- 2004.06.02 (SaemSong)
+	▩ #define GUILD_REWORK		추가 (ExDB 같이 사용함)
+	   길드 읽기 작업을 실시간으로 수정
+
+- 2004.06.02 (apple)	(죽었을때 경험치 손실 로그 %d -> %u 로 수정)
+	//#BUGFIX_20040602_ExpLog
+
+//////////////////////////////////////////////////////////////////////////////
+- 2004.06.01 (foguy)	(인증서버에서 옵션 읽기 게임서버 부분 추가)
+ADD_OPTION_RELOAD_ITEM_TO_JOINSERVER define 추가
+ ** 인증서버에서는 ServerContro.dat 파일 추가하면 됨
+
+//////////////////////////////////////////////////////////////////////////////
+- 2004.05.28 (foguy)	(다크로드패치때 적용)
+  ▩ Item.txt 변경 
+	1. ItemSlot 추가 : 아이템이 장착되는 위치
+	2. SkillType 추가 : 아이템이 가지는 스킬(skill.txt의 값)
+	3. 다크로드 Class 추가
+
+
+- 2004.05.21 (b4nfter)	(0.98.52)
+  ▩ message.wtf 파일 추가
+	1220	"카오스 캐슬 안에서는 거래를 할 수 없습니다."
+	1221	"카오스 캐슬 안에서는 개인상점을 열 수 없습니다."
+	1222	"카오스 캐슬 안에서는 파티를 요청할 수 없습니다."
+	1223	"카오스 캐슬 안에서는 길드전 신청을 할 수 없습니다."
+	1224	"카오스 캐슬로 입장할 수 없는 지역입니다."
+	1225	"무법자는 카오스 캐슬로 입장할 수 없습니다."
+	1226	"결투 중에서는 카오스 캐슬로 입장할 수 없습니다."
+	1227	"길드전 중에는 카오스 캐슬로 입장 할 수 없습니다."
+	1228	"탈것을 착용하고 있으면 카오스 캐슬로 이동할 수 없습니다."
+	1229	"카오스 캐슬에 변신반지를 착용하고 입장하실 수 없습니다."
+	1230	"당신은 제 %d 카오스 캐슬에 오셨습니다."
+	1231	"카오스 캐슬 안에서는 결투 신청을 할 수 없습니다."
+	1232	"카오스 캐슬 입장까지 %d 분 남았습니다."
+	1233	"제 %d 카오스 캐슬 퀘스트가 시작되었습니다."
+	1234	"근위병들의 영혼이 정화되었습니다. 퀘스트에 성공하였습니다."
+	1235	"퀘스트에 실패하였습니다. 다음 기회를 이용해 주세요."
+	1236	"인원 부족으로 인해 카오스 캐슬이 시작되지 않았습니다."
+	1237	"카오스 %d 캐슬 : %s 님께서 입장료를 모두 얻는 행운 당첨 (%d젠)"
+
+
+- 2004.05.12 (b4nfter)
+  ▩ 카오스 캐슬 관련 서버 종료 에러 (ChaosCastle.CPP : VOID CChaosCastle::PullObjInnerPlace() 메서드)
+  	//EnterCriticalSection(&m_stChaosCastleData[iChaosCastleIndex].m_critMonsterCount);
+	..
+	if ((gObj[iMonsterIndex].Life > 0) && CHECK_CHAOSCASTLE(gObj[iMonsterIndex].MapNumber) && gObj[iMonsterIndex].Connected > 0) {
+	..
+	..
+
+	임계구역이 없어서 iMonsterIndex 가 깨짐 (Access Violation) -> 임계구역 추가
+
+
+
+- 2004.05.12 (b4nfter)
+  ▩ CMonsterHerd 클래스에서 임계구역을 그냥 리턴하는 버그
+	VOID MonsterHerd::Stop()
+	{
+		m_bHerdActive = FALSE;
+		
+		if (!m_mapMonsterHerd.empty()) {
+			EnterCriticalSection(& m_critMonsterHerd);
+			if (m_mapMonsterHerd.empty()) {
+				LeaveCriticalSection(& m_critMonsterHerd);		// -> 수정됨
+				return;
+			}
+	...
+	...
+
+
+
+- 2004.05.12 (b4nfter)
+  ▩ 카오스캐슬 본섭 버그 패치 (0.98.45 - 본섭, 테섭)
+	'ChaosCastle.cpp' 파일 안의 _CHAOSCASTLE_DATA 구조체의 대부분의 임계구역 동기화 부분 제거 (사용자 입장, 인원수 체크부분 제외)
+
+  ▩ 블러드 캐슬 - 6캐슬 투명망토로 7캐슬 입장 가능하도록 한 설정 비활성화
+	//#define USER_ENTER_BLOODCASTLE7_WITH6_20040330
+
+
+- 2004.05.11 (b4nfter)
+  ▩ 카오스캐슬 본섭 패치 (0.98.44 - 본섭, 테섭)
+	#define CHAOSCASTLE_SYSTEM_20040408 참조
+
+
+- 2004.5.06 (SaemSong)
+  ▩ 1000젠이 없는데도 불구하고 편지가 보내지던 버그 수정		//#BUGFIX_20040506_01
+	기존 -> if( (gObj[aIndex].Money<1000) && (gObj[aIndex].WarehouseMoney<1000) ) 
+		기획 초기 의도에 맞게 창고도 같이 체크했지만 추후 기획이 변경되면서 빠지지 않아 발생
+	이후 -> if( gObj[aIndex].Money < 1000 )  
+		인벤토리 젠만 체크 함
+  
+- 2004.4.23 (b4nfter)	(0.98.36)
+  ▩ 내친구에게 편지 보낼 때 개인소지금만 1000젠 미만이고 창고에 돈이 있을 경우 편지 비용이 나가지 않음 -> 일본 버그리포트 내용 (국내도 같은 현상)
+	EDSProtocal.cpp -> BOOL WithdrawUserMoney(char *Type, LPOBJECTSTRUCT lpObj, int Withdraw_Money)
+		/*else if( lpObj->WarehouseMoney-Withdraw_Money > 0 )
+		{
+		...
+		...
+		*/
+		주석 처리되어 있는 부분이 코드에 포함되어야 해결될 것으로 보임
+
+
+- 2004.4.22 (b4nfter)	(0.98.36)
+  ▩ message.wtf 파일 추가
+	1216	"%s님과의 결투에서 승리하셨습니다."
+	1217	"%s님과의 결투에서 패배하셨습니다."
+	1218	"개인상점 개설 중에서는 카오스 조합을 사용하실 수 없습니다."
+	1219	"등록하신 개인상점 상품이 모두 팔렸습니다."
+
+
+- 2004.4.14 (apple)		(0.98.35T - 테섭 서버패치)
+  ▩ +12, +13 아이템 추가 : ITEM_12_13_20040401
+						  : CHAOS_MIX_UPGRADE 카오스 조합 부분 업그레이드가 선행 적용되야 함
+
+  ▩ HP 생명 물약 +1 추가 : %5 추가 생명, HP 차는 횟수 2회, 가격 조정 pow(2, level)
+
+  ▩ Effect 보내는 함수, 프로토콜 추가 됨
+		// 0x48
+		#define EFFECT_POTION_HP			0x01	// 생명
+		#define EFFECT_POTION_MP			0x02	// 마나
+		#define EFFECT_LEVELUP				0x10	// 레벨업
+		typedef struct 
+		{
+			PBMSG_HEAD	h;	
+			BYTE		NumberH;		// 먹은넘 인덱스
+			BYTE		NumberL;
+			BYTE		btType;			// 포션 정보(효과타입)
+		} PMSG_EFFECTINFO, * LPPMSG_EFFECTINFO;
+  
+
+- 2004.4.8 (b4nfter)	(0.98.33)
+  ▩ GCLevelUpMsgSend() 에서 LevelUpPoint 가 BYTE로 되어있어서 255 넘을 시 클라이언트 표기상에 혼란 -> WORD로 변경
+
+
+- 2004.4.8 (b4nfter)	(0.98.33)
+  ▩ Money의 수치를 INT -> DWORD로 변경, ZEN_TYPE_INT_TO_DWORD_20040408 참조
+	Money 타입이 변경된 프로토콜 들
+		[0xF3][0x03] 선택한 캐릭터로 맵 진입 요청 결과
+		[0x34] 아이템 내구력 수리 결과
+		[0x81] 돈을 입/출금 시킨다. (클->서)
+		[0x81] 돈을 업데이트 시킨다. (서->클)
+
+
+- 2004.4.2 (b4nfter)	(0.98.32T - 테섭 서버패치)
+  ▩ 블러드캐슬 3차 이벤트 관련 - 경기 후 캐슬의 남은시간 누적저장, 랭킹서버와 함께 패치 (BLOODCASTLE_EVENT_3RD_20040401 참조)
+	
+
+- 2004.3.22 (b4nfter)	(0.98.28 - 본섭, 테섭)
+	ClientExeVersion	= 0.98.13
+	ClientExeSerial		= nOiM0pEaCh0mEnT4
+
+  ▩ 블러드캐슬 입장횟수 제한 수정 (랭킹서버도 수정)
+	기존에 랭킹서버에 보내는 0x08 패킷으로 체크와 입장횟수 증가를 하던 것에서
+	0x08 (체크), 0x09 (입장횟수 증가 - 입장직전에) 두개의 패킷으로 분리
+	
+  ▩ 블러드캐슬 사망시 절대무기 가지고 나오는 버그 수정 -> 죽음과 동시에 자신이 떨군 아이템 (절대무기) 먹을 수 있었음
+	[0x22] CGItemGetRequest() 에서 
+
+#ifdef USER_DIE_ITEMGET_BUG_PATCH_20040322
+	// 죽어가는 중이면 가질 수 없게
+	if( gObj[aIndex].DieRegen == 1 ) {
+		pResult.result = 0xFF;
+
+#ifdef ADD_SET_ITEM_OPTION	
+		pResult.h.size -= ITEM_BUFFER_SIZE;
+#else
+		pResult.h.size -= 4;
+#endif
+	...
+	
+
+- 2004.3.18 (b4nfter)	(0.98.27T - 테섭)
+  ▩ 개인상점 계정블록 계정 아이템 거래 방지 (아래의 파일들이 다음 루틴 추가)
+	CGPShopReqSetItemPrice()	
+	CGPShopReqOpen()			
+	CGPShopReqBuyList()			
+	CGPShopReqBuyItem()			
+
+	if( (gObj[aIndex].Penalty&PENALTY_ITEMDONTTOUCH) == PENALTY_ITEMDONTTOUCH)
+	{
+		LogAddTD("[PShop] [%s][%s] ERROR : Cant't Open Shop - Item Block", 
+			gObj[aIndex].AccountID,
+			gObj[aIndex].Name
+			);
+		...
+		return;
+	}
+
+
+- 2004.3.08 (b4nfter)	(0.98.23 - 본섭)
+  ▩ 사용자 죽을 때 레벨 270 이상 경험치 버그 수정됨 (테섭 같이)
+	void gObjUserDie() 중 아래의 변수들을 int -> DWORD 로
+		//------------------------------------------------------------------------
+		// 경험치를 감소 시킨다.
+		//------------------------------------------------------------------------
+		DWORD minexp = gLevelExperience[lpObj->Level-1];
+		DWORD maxexp = gLevelExperience[lpObj->Level];
+		DWORD subexp = 0;
+		DWORD decexp = 0;
+
+
+- 2004.3.08 (foguy)		(0.98.23T - 테섭)
+  ▩ 게임가드 서버 인증 모듈 업데이트 
+	#define NPROTECT_GG_CHECKSUM_UPDATE
+	1. 게임서버에서 생성되는 하나의 키중에 대한 결과 값이 8개였던것을 하나의 인증 값만으로 적용
+	2. 게임 서버 키값을 0 ~ 7 값으로 사용가능하게 하여, 업데이트 가능하게 함. 
+	3. 현재 키값에 대한 정보 파일 csauth.idx(현재값 4)
+	4. csauth.idx 파일 추가 , csauth.tab 파일 갱신
+	        
+
+- 2004.2.28 (b4nfter)		(0.98.20T - 테섭)
+  ▩ 개인상점 테섭 패치
+	*> . #define PERSONAL_SHOP_20040113 참조
+	ClientExeVersion	= 0.98.07
+	ClientExeSerial		= nQT3aK4atQ3116we
+
+	*> . 개인상점 관련 버그 수정
+		void GCItemListSend(int aIndex)
+		{
+			PMSG_INVENTORYLISTCOUNT	pMsgILC;
+			PMSG_INVENTORYLIST		pMsgIL;
+			int						sOfs       = sizeof(pMsgILC);
+			int						pMsgILSize = sizeof(pMsgIL);
+			
+			BYTE					sendBuf[1024];	// -> 원래 500 바이트로 정의됨 (버퍼 오버플로우 유발)
+
+	*> . commonserver.cfg에 개인상점 거래 가능 ON / OFF 기능 추가
+			PersonalShopOpen	= 1					// 0 이면 개인상점 사용 불가
+
+  ▩ 결투 시스템 패치
+	*> . gObjLifeCheck() 의 DUEL_SYSTEM_20031028 참조
+	*> . 결투 당사자 둘중 한명이 10 우선승 하면 결투 종료 -> 결투 우승자에게 폭죽
+
+
+- 2004.2.18 (SaemSong)		
+  ▩ #BUGFIX_20040218_01
+	길드 종료 처리 수정
+
+- 2004.2.16 (b4nfter)		(0.98.11 - 본섭, 테섭)
+  ▩ 본서버 내 친구 이벤트 (우정의돌, 전사의반지) 패치
+	ClientExeVersion	= 0.98.05
+	ClientExeSerial		= 7QTaFK4hOQAZ2AMe
+
+- 2004.2.11 (b4nfter)
+  ▩ 테스트서버 내 친구 이벤트 (우정의돌, 전사의반지) 패치
+	*> . 추가된 define
+	#define FRIENDSHIP_STONE_20040206					// 우정의돌 등록, 개수 확인 관련
+	#define FRIENDSHIP_STONE_EXCHANGE_20040206			// 우정의돌 환전 시 체크 (차후에 이벤트 막바지에 사용) -> 일단 주석처리 됨
+	#define FRIENDSHIP_EVENT_RING_BOX_20040211			// 전사의반지 아이템 드롭, 거래, 줍기등의 제약관련
+
+	*> . 추가된 메시지 (message.wtf)
+	1214	"당신이 등록한 우정의돌 개수는 현재 %d개 입니다."
+	1215	"레벨 80 이상이 되어야 반지를 던질 수 있습니다."
+
+- 2004.2.03 (SaemSong)		(0.98.03T)
+  ▩ #BUGFIX_20040203_01
+	사용자 종료시에 길드 종료가 안되던 버그 수정
+
+- 2004.1.19 (SaemSong)
+  ▩ 친구 기능 메시지 정리 (0.98.03T)
+  	
+- 2004.1.2 (SaemSong)
+  ▩ 친구 기능 추가
+    #define __FRIEND_WORK__  친구 작업 내용 
+	EDSProtocol.cpp 에 주로 작업되어 있씀
+	Protocol.cpp, Protocol.h, sprodef.h, DSProtocol.cpp, DSProtocol.h, GameMain.cpp, User.cpp..등 수정됨
+	
+- 2003.12.30 (b4nfter)
+  ▩ 본섭, 테섭 0.97.35 패치 (클라이언트 버전은 테섭만 변경)
+	ClientExeVersion	= 0.97.24
+	ClientExeSerial		= bQTGsH1TOa9Z2BHZ
+
+
+- 2003.12.24 (b4nfter)
+  ▩ message.wtf 추가 
+	(백색 마법사 이벤트 관련)
+	1205	"%s님이 %s를 침략한 백색의 마법사 군단을 물리쳤습니다."
+	1206	1206"백색의 마법사 군단이 뮤 월드를 노리고 있습니다. (%d분전)"
+	1207	"백색의 마법사 군단이 뮤 월드를 노리고 있습니다."
+	1208	"백색의 마법사 군단이 파괴의 오크들을 이끌고 뮤 월드를 침략하고 있습니다."
+	1209	"백색 마법사 군단이 사라졌습니다."
+
+	(마법사의반지 이벤트 관련)
+	1210	"당신은 이미 마법사의 반지를 가지고 있으므로 집을 수 없습니다."
+	1211	"레벨 40 이상이 되어야 반지를 던질 수 있습니다."
+
+	(블러드캐슬 관련)
+	1212	"블러드 캐슬 안에서는 거래를 할 수 없습니다."
+	1213	"상대방과 정당방위가 성립하므로 결투를 할 수 없습니다."
+
+
+- 2003.12.15 (b4nfter)
+  ▩ 본섭 (0.97.27), 테섭 (0.97.28T) 패치
+	ClientExeVersion	= 0.97.18
+	ClientExeSerial		= bQTGsHA1Oa9Z2NHZ
+	1 . 반지 이벤트 본섭 적용
+	2 . 버그수정 (Infolist 0.97r 참조)
+
+
+- 2003.12.12 (b4nfter)
+  ▩ 테섭 패치 (0.97.26T) - 버그수정
+	ClientExeVersion	= 0.97.18
+	ClientExeSerial		= b9TGsHA1Oa9m2NHZ
+	1 . 블러드 캐슬 입장레벨 버그 (350 이상 못들어가는) 수정 -> BloodCastle.h (g_sttBLOODCASTLE_LEVEL[][]) 참조
+	2 . 창고에 마법사의 반지 들어가는 버그 수정 -> #ifdef RING_EVENT_ITEMBOX_20031124		// 반지이벤트 - 창고이동 막음 참조
+
+
+- 2003.12.11 (b4nfter)
+  ▩ 테섭 패치 (0.97.25T) - 반지 이벤트 (용사의반지, 백색마법사습격)
+	ClientExeVersion	= 0.97.17
+	ClientExeSerial		= b9OGsHA1Oa9m2NHZ
+
+
+- 2003.12.2 (foguy)
+  ▩ 테섭 패치 - 요정 홀리 보우 데미지 버그 관련 수정
+	ClientExeVersion	= 0.97.15
+	ClientExeSerial		= bYOGsHABOa9T2NHY
+
+
+- 2003.12.2 (b4nfter)
+  ▩ 새로운 함수추가 : gObjGetItemCountInEquipment() - 사용자의 장비 중에서 해당 아이템의 개수를 얻는다. (위치 : user.cpp)
+	int	 gObjGetItemCountInEquipment(int aIndex, int itemtype, int itemindex, int itemlevel);
+
+
+- 2003.12.2 (b4nfter)
+  ▩ 이벤트 관련 반지 아이템 추가 - #define RING_EVENT_ITEMBOX_20031124 참조
+
+  ▩ 이벤트 관련 몬스터 무리 시스템 추가 - #define MONSTER_HERD_SYSTEM_20031120 참조
+
+  ▩ 테스트 서버 명령 추가 - /좌표이동 <맵번호> <X좌표> <Y좌표>
+
+
+- 2003.12.1 (b4nfter)
+  ▩ message.wtf 추가 (결투관련)
+	1183	"당신은 이전에 이미 결투를 신청했습니다."
+	1184	"당신은 이미 결투 중 입니다."
+	1185	"재결투를 하기위해서 이전 결투를 취소해주세요."
+	1186	"요청한 상대방의 이름이 달라서 결투를 요청할 수 없습니다."
+	1187	"결투 요청이 거부되었습니다."
+	1188	"길드전 중에는 결투신청을 할 수 없습니다."
+	1189	"상대가 길드전 중이므로 결투신청을 할 수 없습니다."
+	1190	"블러드 캐슬 안에서는 결투를 할 수 없습니다."
+	1191	"거래 중에는 결투를 할 수 없습니다."
+	1192	"%s님이 거래 중이므로 결투를 할 수 없습니다."
+	1193	"%s님이 이미 결투신청을 받았으므로 결투를 할 수 없습니다."
+	1194	"%s님이 결투요청 중이므로 결투를 할 수 없습니다."
+	1195	"%s님이 결투 중이므로 결투를 할 수 없습니다."
+	1196	"%s님에게 결투를 요청했습니다."
+	1197	"당신은 이미 결투신청 중 입니다."
+	1198	"NON-PK 서버에서는 결투를 하실 수 없습니다."
+	1199	"무법자는 결투를 선청할 수 없습니다."
+	1200	"무법자에게는 결투를 신청할 수 없습니다."
+
+  ▩ 버그수정 (반지이벤트 관련 행운의 상자 떨어지는 버그)
+	BOOL CGItemDropRequest(LPPMSG_ITEMTHROW lpMsg, int aIndex, int drop_type)
+		-> #ifdef RING_EVENT_ITEMBOX_20031124 아래
+		if( type == MAKE_ITEMNUM(13,20) ) => else if( type == MAKE_ITEMNUM(13,20) )
+		...
+
+
+- 2003.12.1 (foguy)
+  ▩ message.wtf 추가
+	1201	게임을 다시 실행해 보시고 계속 같은 오류가 발생하면,
+	1202	game@inca.co.kr 로 GameGuard 폴더의 erl 파일들을 첨부하고, 
+	1203	연락처를 적어서 메일로 보내주시기 바랍니다.
+	2014	블러드캐슬
+	2034	BloodCastle
+
+- 2003.11.19 (b4nfter)
+  ▩ What's up 용 포트 개설 (55902)
+	클래스 CWhatsUpDummyServer, 객체 gWhatsUpDummyServer 참조
+
+- 2003.11.11 (foguy)
+  ▩ Item.txt에서 Type 0 ~ 5 (검에서 지팡이류)에 마력 값 추가
+	#define ITEM_SCRIPT_ADD_MAGICPW 참조
+
+- 2003.11.07 (foguy)
+  ▩ 프로토콜 추가
+	0xBA ~ 0xBF 까지 새로운 스킬용으로 예약
+	헬파이어2용으로 BA사용
+
+
+- 2003.11.05 (b4nfter)
+  ▩ 만렙 (350) 이 몬스터에게 죽었을때 경험치가 오히려 증가하는 버그 수정
+	gObjUserDie() -> decexp = (((maxexp-minexp)*decexprate)/100);	=> maxexp 가 gLevelExperience[] 의 인덱스범위 밖의 값을 가짐 (int maxexp = gLevelExperience[lpObj->Level];)
+	=>	gLevelExperience[MAX_LEVEL] -> gLevelExperience[MAX_LEVEL+1]
+	=>	GameMain에서 경험치를 351까지 계산
+	for( n=1; n<MAX_LEVEL+1; n++)
+	{
+		gLevelExperience[n] = (9+n)*n*n*10;
+		if( n > 255 )
+		{
+			gLevelExperience[n] += (9+LevelOver_N)*LevelOver_N*LevelOver_N*1000;
+			LevelOver_N++;
+		}		
+		//LogAdd("%3d   %u      %u", n, gLevelExperience[n], gLevelExperience[n]-gLevelExperience[n-1]);
+	}
+	
+- 2003.11.03 (foguy)
+  ▩ 사내개발서버 전용 명령어 추가 
+  (GMMng.cpp)
+	- /스탯리셋
+	- /퀘스트리셋
+
+- 2003.11.03 (b4nfter)
+  ▩ 본섭 패치
+	ClientExeVersion	= 0.97.10
+	ClientExeSerial		= b9xGyHABOa9m2NHY
+
+- 2003.11.03 (foguy)
+  ▩ 스킬 붙히기 버그 수정
+	** 방법 ** 
+	1.	스킬이 있는 같은 종류의 한손 무기 2개.
+	2.	한손무기 스킬 없는 것.
+	3.	앞으로 쓸 스킬이 없는무기. (대부분 데미지 때문에 양손무기 사용.)
+
+	상대방이 나에게 거래를 걸기 전에 양손에 스킬 무기착용 그리고 거래를 겁니다.
+	Ok를 누릅니다. 그 뒤에 양손에 들은 스킬 무기를 빼고, 스킬이 없는 한손무기를 한 개듭니다. 이 상태에서 나도 ok 그리고 취소를 누른다. (ok를 누르자마자 합니다.)
+	그럼 거래 취소 메시지가 뜹니다.
+
+	다시 인벤을 열고 스킬 없는 무기를 빼고, 양손에 스킬 무기를 착용한다. 그리고 양손에 무기를 빼고 쓰고 싶은 무기를 착용.
+
+	이때 스킬이 표시되는 곳에는 아무런 변화가 없습니다.
+	그 곳을 마우스로 클릭하면, 스킬이 뜹니다. 이제 스킬을 쓸수 있습니다.
+
+	** 수정내용
+	(user.cpp)
+	void gObjTradeCancel(int aIndex);		
+	#define TRADE_SKILLBUG_FIX 참조
+
+
+
+- 2003.10.31 (b4nfter)
+  ▩ 본섭 패치
+	ClientExeVersion	= 0.97.04
+	ClientExeSerial		= b9xGTgABZafa2NHN
+
+- 2003.10.31 (foguy)
+  ▩ message_kor.wtf 텍스트 추가
+  1182	장비가 변경되었습니다
+
+- 2003.10.30 (foguy)
+  ▩ message_kor.wtf 텍스트 추가
+  1181	블러드 캐슬 안에서는 거래를 할 수 없습니다
+
+- 2003.10.30 (b4nfter)
+  ▩ 테섭 패치
+	ClientExeVersion	= 0.97.03
+	ClientExeSerial		= b9xGTgABZa9m2NHY
+
+  ▩ 본섭 패치
+	ClientExeVersion	= 0.97.02
+	ClientExeSerial		= b9xGTgABZaGa2NHN
+
+- 2003.10.28 (b4nfter)
+  ▩ 테섭 패치
+	ClientExeVersion	= 0.97.01
+	ClientExeSerial		= b9xGTgABZa9m2NHN
+
+  ▩ 본섭 패치
+	ClientExeVersion	= 0.97.00
+	ClientExeSerial		= b9xGTgABZa9a2NHN
+
+- 2003.10.28 (b4nfter)
+  ▩ 결투 시스템 추가 -> #define DUEL_SYSTEM_20031028 참조
+
+  ▩ 상점번호 변경 -> 고침
+	gObjSetMonster() 초기의 
+		case 231 : lpObj->ShopNumber = 12; break;	// 데비아스 새 상인
+		case 230 : lpObj->ShopNumber = 11; break;	// 로랜시아 새 상인
+
+- 2003.10.27 (b4nfter)
+  ▩ 아이템 요구수치 (마나) 변경 -> #define ITEM_REQUIREMENT_CHANGE_20031027 참조
+
+- 2003.10.27 (b4nfter)
+  ▩ 2003년 10월 28일 테섭 패치
+	ClientExeVersion	= 0.96.25
+	ClientExeSerial		= b9xGTgAfZa9a2NHN
+
+- 2003.10.22 (b4nfter)
+  ▩ 2003년 10월 24일 테섭 패치
+	ClientExeVersion	= 0.96.24
+	ClientExeSerial		= b2xGTgAfZa9a2NHN
+
+- 2003.10.22 (b4nfter)
+  ▩ 스톤 환전 관련 GS <-> ES 프로토콜에 0x09 추가, 클라이언트의 기존 0x98 패킷에 BYTE btType (0:레나환전 / 1:스톤환전) 필드추가 -> #define FOR_LOTTO_EVENT
+
+
+- 2003.10.22 (SaemSong)
+  ▩ SKill(Kor).txt 문서의 제일 마지막에 end 추가 (End가 빠져 있었씀)
+
+- 2003.10.17 (foguy)
+  ▩ Item.txt에서 방패 방어율 추가 
+  #define ITEM_SCRIPT_ADD_SHEILD_BLOCKING 참조
+
+  ▩ 변신 반지 아이템 드롭률 따로 뺌(이벤트 아이템과 같이) - 현재 일본 테스트 중
+    #define ITEMDROP_RINGOFTRANSFORM 참조 
+
+  ▩ 법사 계산 공식 및 그외 변경
+	#define WIZARD_UPGRADE	참조
+
+  ▩ 아이템 추가 작업 관련 
+	#define ADD_ITEM 참조
+
+  ▩ 인증서버에 연결 될때 ServerCode 추가	(MuLog에 Servercode추가작업을 위해서)
+	#define JOINSERVER_USING_SERVERCODE 참조
+
+  ▩ 인증에서 사용자 인증할때 PC방 Guid포함 (블러드캐슬 2차이벤트(PC방) 작업을 위해
+	#define ADD_PROTOCOL_PCBANG_GUID 참조
+
+  ▩ 데빌스퀘어 입장 인원 감소 20->10
+	#define DEC_MAX_DEVILSQUARE_OBJCOUNT 참조
+
+  ▩ 태국 NonPK 기능 추가
+
+
+- 2003.10.15 (b4nfter)
+  ▩ 뮤 복권 이벤트 관련 
+	1 . 0x94 프로토콜에 m_Type 값 2번 (복권인터페이스 용) 추가 -> NpcEventChip() 에 #define FOR_LOTTO_EVENT 로 추가
+	2 . cb_protocol.h 에 이벤트서버와 통신할 0x08 패킷 추가
+	3 . 뮤 클라이언트와 통신할 0x9D 패킷 추가
+
+  ▩ 블러드캐슬 PC방 참여횟수 이벤트를 위해 cb_protocol.h 의 [0X07] 패킷을 수정 -> INT iPCRoomGUID; 추가
+	CBloodCastle::SendRewardScore() 에 관련루틴 변경	
+
+
+- 2003.10.15 (b4nfter)
+  ▩ 블러드캐슬 성문, 석상 파괴 시 엉뚱한 사람이 파괴했다는 메시지가 나오는 부분 수정
+	gObjSetState() -> gObjLifeCheck() 로 메시지 출력부분 이동
+
+
+- 2003.10.14 (b4nfter)
+  ▩ 법서, 구슬 아이템 드롭확률 낮춤 (1/50 -> 1/70)
+	void CMonsterItemMng::gObjGiveItemSearch(int monsterlevel, int maxlevel)
+
+
+- 2003.10.13 (b4nfter)
+  ▩ 블러드캐슬 게임로그 수정
+	기존에 각 캐슬번호가 -1 되어서 나오던 것을 캐슬번호에 맞게 나오게 수정
+
+  ▩ 게임로그중 만렙일때 경험치 않나오는 것 나오게 수정
+	gObjLevelUp()
+	CBloodCastle::LevelUp()
+
+
+- 2003.10.10 (b4nfter)
+  ▩ 블러드캐슬 10.21 패치를 위한 수정
+	#define FOR_BLOODCASTLE3 참조
+
+
+- 2003.10.08 (foguy)
+  ▩ 아이템 공격력 계산중에서 카오스 아이템의 계산 방식 변경
+	#define CHAOSITEM_EXDAMAGE_CHANGE	참조
+
+  ▩ 상점 11, 12번 추가
+	#define ADD_SHOP_11_12	참조
+
+
+- 2003.10.06 (foguy)
+  ▩ Item.txt (type 12, 15, 젠가격 추가(
+	#define ITEM_SCRIPT_ADDZEN 참조
+
+  ▩ 본섭 패치
+	ClientExeVersion	= 0.96.16 
+	ClientExeSerial		= b2xGpgYfZa9a2NHc
+
+
+- 2003.09.30 (b4nfter)
+  ▩ 블러드 캐슬 보스몬스터 할당량 계산 오류
+  : 원래 보스 몬스터 할당량은 성문이 격파되고 해야 하지만 일반몬스터 할당량을 채운 후에 하므로 차이가 발생 -> 수정
+  
+  ▩ 길드전 시 같은 길드원 공격 않되게
+  CObjAttack::Attack() -> 공격, 피공격 모두 사람인 경우에 -> 루틴 추가됨
+	if( lpCallObj->Type	  == OBJTYPE_CHARACTER && 
+		lpCallTargetObj->Type == OBJTYPE_CHARACTER )
+	{
+		if( lpCallTargetObj->Level  <= PK_MINIMUM_LEVEL || 
+			lpCallObj->Level    <= PK_MINIMUM_LEVEL )
+		{
+			return FALSE;
+		}
+
+		// 길드전 시 같은 길드원 공격 않되게 (b4nfter - 2003-09-30)
+		if (( lpObj->lpGuild->WarState == 1 && lpTargetObj->lpGuild->WarState == 1 ) &&
+			(lpObj->lpGuild->Number == lpTargetObj->lpGuild->Number)
+			)
+		{
+			// 현재 길드전 중 이고 같은 길드원이라면 공격않됨
+			return FALSE;
+		}
+
+
+- 2003.09.30 (foguy) 
+  ▩ 맵속성 암호화 작업 추가
+  (MapClass.cpp)
+  int MapClass::AttrLoad(char *filename);
+  #define ENC_TILE_ATTR 참조 : 클라이언트와 동시에 수정 되어야 됨
+
+
+- 2003.09.29 (foguy) 
+  ▩ 여러개의 Checksum파일을 지원가능하게 수정
+  #define MULTI_CHECKSUM 참고...
+
+  ▩ 로그 수정(해외 버전 갱신해야됨)
+  (protocol.cpp)   
+
+	- 아이템 판매시 로그에서 내구력 추가 
+  message_xxx.wtf 
+  * 수정전
+  485번 : [%s][%s] Shop(%d) Item Sell Money:%d %s:%d/%d/%d/%d/%d Ex:[%d,%d,%d,%d,%d,%d,%d]
+  * 수정후 
+  485번 : [%s][%s] Shop(%d) Item Sell Money:%d %s:%d/%d/%d/%d/%d Dur:%d Ex:[%d,%d,%d,%d,%d,%d,%d]
+
+    - 석 바를때 사용할 석의 serial추가
+  * 수정전 
+  557번 : [%s][%s]After using Jewel of Bless : (%s) serial:(%d)(%d)
+  559번 : [%s][%s]After using Jewel of Soul  : (%s) serial:(%d)(%d)
+  577번 : [%s][%s]After using Jewel of Life  : (%s)serial:(%d)(%d)
+  486번 : Request to trade [%s][%s]  to [%s][%s]
+
+  * 수정후
+  557번 : [%s][%s]After using Jewel of Bless(%d) : (%s) serial:(%d)(%d)
+  559번 : [%s][%s]After using Jewel of Soul (%d) : (%s) serial:(%d)(%d)		  
+  577번 : [%s][%s]After using Jewel of Life (%d) : (%s)serial:(%d)(%d)		  
+  486번 : Request to trade [%s][%s][%s]  to [%s][%s][%s]		  
+
+
+- 2003.09.22 (foguy) 
+  ▩ 데미지 반사시에 카오가 적용되는 버그 수정
+  (ObjAttack.cpp)
+  BOOL CObjAttack::Attack(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, CMagicInf *lpMagic, int magicsend, BYTE MSBFlag, int AttackDamage)
+  bDamageReflect 변수 추가
+
+  ▩ SMS 블럭 기능 추가 (중국용)
+  (sprotocol.cpp)
+  #define SMS_BLOCK			// 참조
+
+- 2003.09.22 (foguy) 
+  ▩ 본섭 패치
+	ClientExeVersion	= 0.96.12 
+	ClientExeSerial		= b2xGpgYfka9a2NHc
+
+  ▩ 블러드본/대천사의 날개 드롭 확률 수정
+  gObjMonster.cpp
+  BOOL gEventMonsterItemDrop(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj);
+  * 수정전
+	if( lpObj->Level < 35)			// +1
+	{
+		level = 1;
+	}
+	else if( lpObj->Level < 46)		// +2
+	{
+		level = 2;
+	}
+	else if( lpObj->Level < 56)		// +3
+	{
+		level = 3;
+	}
+	else if( lpObj->Level < 67)		// +4
+	{
+		level = 4;
+	}
+	else if( lpObj->Level < 75)		// +5
+	{
+		level = 5;
+	}
+	else							// +6
+	{
+		level = 6;
+	}
+
+  * 수정후  
+	if (rand()%10000 < g_iBloodBoneDropRate) {
+	x    = lpObj->X;
+	y    = lpObj->Y;
+
+	if( lpObj->Level < 32)			// +1 ( 0~ 31)
+	{
+		level = 1;
+	}
+	else if( lpObj->Level < 45)		// +2 (31~ 44)
+	{
+		level = 2;
+	}
+	else if( lpObj->Level < 57)		// +3 (45~ 56)
+	{
+		level = 3;
+	}
+	else if( lpObj->Level < 68)		// +4 (57~ 67)
+	{
+		level = 4;
+	}
+	else if( lpObj->Level < 76)		// +5 (68~ 75)
+	{
+		level = 5;
+	}
+	else							// +6 (75~ )
+	{
+		level = 6;
+	}
+
+
+
+- 2003.09.20 (b4nfter)
+  ▩ 기능추가
+    블러드캐슬 이벤트에 보스몬스터 제거 부분이 추가되어 이에 대한 추가작업과 테스트 이루어짐
+  ▩ 추가된 부분
+    user.cpp -> gObjSetState() 에서 보스 몬스터 체크하는 부분
+	BloodCastle.cpp -> GetCurrentLiveUserCount() 메서드 추가
+
+
+- 2003.09.20 (foguy)
+  ▩ 데미지 반사 : 데미지 적용 안되는 버그 수정
+	(ObjAttack.cpp)
+	BOOL CObjAttack::Attack(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, CMagicInf *lpMagic, int magicsend, BYTE MSBFlag, int AttackDamage)();
+
+	* 수정전 
+	if( AttackDamage == 0 )
+	{
+	}
+	else
+	{
+		MsgDamage = 0x20;
+	}
+
+	* 수정후
+	if( AttackDamage == 0 )
+	{
+	}
+	else
+	{
+		MsgDamage = 0x20;
+		lpTargetObj->Life -= AttackDamage;
+		if( lpTargetObj->Life < 0 ) lpTargetObj->Life = 0;			
+	}
+
+
+- 2003.09.18 (b4nfter)
+  ▩ 버그수정
+	1 . 블러드캐슬 보상경험치를 보냈을 때 클라이언트와 수치가 차이났던 버그
+	=> 기존의 0x16 프로토콜을 사용하여 보냄으로 최대 WORD 범위밖에 보낼수가 없음. 0x9C 를 새로 만들어서 기존의 0x16 프로토콜 확장
+
+
+
+- 2003.09.16 (b4nfter)
+	ClientExeVersion	= 0.96.06
+	ClientExeSerial		= b2xGVgYfka9a2NHc
+
+
+- 2003.09.16 (foguy)
+  ▩ 이동을 한후, 일정 시간 전기등으로 인해 뒤로 안밀리게 수정
+  (user.h) 변수 추가
+#ifdef APPLY_TESTSERVER
+  char	m_LastTeleportTime;				// 이동을 한후, 일정 시간 전기등으로 인해 뒤로 안밀리게 설정하기 위한 값
+#endif
+
+
+  ▩ 파티 경험치 주는 부분에서, 혼자 떨어져서 사냥했을때 주는 경험치 부분 수정
+  (user.cpp)
+	수정전 :
+	if( lpTargetObj->Level >= 65 )	
+	{	// 몬스터 레벨이 50이상이면		
+		level += 200 - (lpObj->Level*0.2);
+	}
+
+	수정후 :
+	if( lpTargetObj->Level >= 65 )	
+	{	// 몬스터 레벨이 50이상이면
+		if( viewplayer == 1 )
+		{
+			level += (lpTargetObj->Level-64)*(lpTargetObj->Level/4);
+		}
+		else
+		{
+			level += 200 - (lpObj->Level*0.2);
+		}
+	}
+
+
+- 2003.09.13 (b4nfter)
+	1 . 블러드캐슬 경험치 적용 중 오류수정
+		(BloodCastle.cpp, GiveReward_Win())
+		GetAliveUserTotalEXP() 를 매번 호출 -> CalcSendRewardEXP() 내부에서 호출하는 GCKillPlayerExpSend() 에서 다시 이벤트 경험치 누적
+		결과적으로 다음사람은 이전사람이 생존자였다면 그사람의 추가분 경험치에 %된 경험치를 받게됨
+		-> GetAliveUserTotalEXP() 를 최초 한번만 호출하도록 수정됨
+	2 . 경기종료 후 경기장 밖으로 절대무기를 가져간 버그 -> 경기상태가 SetState_Closed() 와 SetState_PlayEnd() 로 변경시 명시적으로 지우도록 수정
+		귀환주문서 사용시 절대무기 드롭만 하던것을 경기상태에 따라 드롭 혹은 지우게 수정
+		
+
+- 2003.09.10 (b4nfter)
+	각서버의 종속2서버만 몇몇인원만 클라이언트 패치 -> 서버에서 체크섬 체크부분 제외
+
+- 2003.09.10 (b4nfter)
+	블러드캐슬 관련 서버 수정내용
+	1 . 스톤 중복등록 버그 수정
+		(protocol.cpp, GCRegEventChipRecv())
+		if( (sitem->m_Type == MAKE_ITEMNUM(14, 21)) && (sitem->m_Level == 1) )		-> 검색조건 수정
+
+	2 . 대천사가 않나오던 버그 수정 -> 없으면 각 캐슬 대기시간이 시작될때 체크하여 생성
+		(BloodCastle.cpp)
+		CBloodCastle 클래스에 CheckAngelKingExist() 메서드 추가 -> SetState_Closed() 에서 체크하면서 없으면 생성
+
+	3 . 대천사의 무기 시리즈 루팅시간 조정 (기존 15분 -> 10초)
+		(DSProtocol.cpp, ItemSerialCreateRecv())
+		MapC[mapnumber].m_cItem[iItemCount].m_LootTime = GetTickCount() + BC_ANGEL_WEAPON_LOOT_TIME;	-> 대천사의 무기 루팅시간 조정
+
+- 2003.09.6 (b4nfter)
+	ClientExeVersion	= 0.96.03
+	ClientExeSerial		= b2xGVgYfgf9a2NHc
+
+- 2003.09.6 (b4nfter)
+  ▩ 테섭 패치 버전
+	ClientExeVersion	= 0.96.02
+	ClientExeSerial		= b2xGVgYegf9a2NHc
+
+- 2003.09.4 (b4nfter)
+  ▩ 테섭 패치 버전 (블러드캐슬)
+	ClientExeVersion	= 0.96.00	
+	ClientExeSerial		= b2xGVgYegf9aENHc
+
+- 2003.09.4 (foguy)
+  ▩ 생석 사용한 후의 아이템 정보 로그 추가
+  (user.cpp)
+  BOOL gObjItemRandomOption3Up(LPOBJECTSTRUCT lpObj, int source, int target)()
+  {
+	// ........................................
+		BYTE NewOption[8];
+
+		ItemIsBufExOption(NewOption, &lpObj->pInventory[target]);
+		LogAddTD("[%s][%s] JewelofLife Result [%d,%s,%d,%d,%d,%d]serial:[%d] dur:[%d] Ex:[%d,%d,%d,%d,%d,%d,%d]", 
+				 lpObj->AccountID, 
+				 lpObj->Name, 
+				 target, 
+				 lpObj->pInventory[target].GetName(), 
+				 lpObj->pInventory[target].m_Level, 
+				 lpObj->pInventory[target].m_Option1, 
+				 lpObj->pInventory[target].m_Option2, 
+				 lpObj->pInventory[target].m_Option3, 
+				 lpObj->pInventory[target].m_Number, 
+				 (BYTE)lpObj->pInventory[target].m_Durability,
+				 NewOption[0],
+				 NewOption[1],
+				 NewOption[2],
+				 NewOption[3],
+				 NewOption[4],
+				 NewOption[5],
+				 NewOption[6]
+				);
+	// ........................................
+  }
+
+  ▩ 소울 바리어 적용 능력치 변경
+  ** 기존 
+  lpTargetObj->m_WizardSkillDefense	= 8+lpObj->Dexterity/80+lpObj->Energy/200;
+  ** 수정
+  lpTargetObj->m_WizardSkillDefense	= 10+lpObj->Dexterity/80+lpObj->Energy/200;
+
+  ▩ 공격 판정 서버 이전 작업 진행중 
+	1 단계 : 헬파이어, 블래스트, 인페르노, 회오리베기, 분노의 일격 (2003. 09.04적용예정)
+	2 단계 : 불기둥, 파워웨이브, 블래스트, 회오리, 아쿠아플래쉬, 관통, 블러드어택
+	3 단계 : 다발, 악령
+
+
+- 2003.09.3 (foguy)
+  ▩ 암호화 된 Item.txt, Skill.txt, Quest.txt 읽는 부분 추가
+  (수정된 코드 : zzzItem.cpp, MagicDamage.cpp, QuestInfo.cpp)
+  (추가된 코드 : \\common\\WZScriptEncode.cpp, WZScriptEncode.h)
+  OpenItemScriptDecode(), void CMagicDamage::LogSkillListDecode(char *filename)(), BOOL CQuestInfo::LoadQuestInfoDecode(char* filename)
+  관련 부분은 #define SCRIPT_DECODE_WORK 으로 정의
+
+  암호화 시키는 프로그램 소스는 소스세이프 \\ServerTeam\\ETC\\MakeCode에 추가
+
+  ▩ 태국 버전 지원가능하게 추가
+  (GameMain.cpp)
+  void ReadCommonServerInfo(){}
+
+
+- 2003.09.1 (foguy)
+  ▩ ITEM_HELPER류에서 Index 14부터는 반지,목걸이류가 아닌데, 생명증가 옵션이 붙게 되는 버그 수정
+    ** 수정전
+	if(_type>=ITEM_HELPER+8 && _type<ITEM_HELPER+MAX_ITEM_INDEX)//반지,목걸이
+	{
+		m_Special[m_SpecialNum] = AT_LIFE_REGENERATION;
+		m_Option3= Option3;
+	}
+	** 수정후
+	if(_type>=ITEM_HELPER+8 && _type<ITEM_HELPER+14)//반지,목걸이
+	{
+		m_Special[m_SpecialNum] = AT_LIFE_REGENERATION;
+		m_Option3= Option3;
+	}
+
+  ▩ 본섭 패치 버전
+	ClientExeVersion	= 00.95.14
+	ClientExeSerial		= bQxkVgYegf9aENHc
+
+  ▩ 황금정예 부대 이벤트 시간 기존의 시간 *3으로 수정되어야 됨~~~~
+	
+
+- 2003.08.28 (foguy)
+  ▩ 아이템드롭시 법서나올확률에 구슬 추가
+  (MonsterItemMng.cpp)
+  void CMonsterItemMng::gObjGiveItemSearch(int monsterlevel, int maxlevel)
+  {
+	//..................................
+		int	BallTable[12] = {7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 18, 19};	
+	while(1)
+	{
+#ifdef NEW_FORSKYLAND3
+		if( (rand()%20) == 0 )	// 법서 나올 확률 1/20
+#else
+		if( (rand()%40) == 0 )	// 법서 나올 확률 1/20
+#endif
+		{
+#ifdef NEW_FORSKYLAND3
+			if( rand()%2 )
+			{	// 법서
+				type = 15;
+				index = rand()%MAX_ITEM_INDEX;
+			}
+			else
+			{	// 구슬류 
+				type = 12;
+				index = BallTable[rand()%12];
+			}
+#else
+			type = 15;
+			index = rand()%MAX_ITEM_INDEX;
+#endif		
+	//..................................
+  }
+
+- 2003.08.27 (foguy)
+  ▩ 폭죽을 던질때 이템 드롭 루틴으로 가거나 폭죽 효과만 낼수있는 플래그 추가(일본용)
+  (Event.cpp)
+  void FireCrackerOpenEven(LPOBJECTSTRUCT lpObj)
+  {
+	// ...............................................
+	if( gOnlyFireCrackerEffectUse )
+	{	// 폭죽 효과만 사용한다
+		PMSG_SERVERCMD	ServerCmd;
+		PHeadSubSetB((LPBYTE)&ServerCmd, 0xF3, 0x40, sizeof(ServerCmd));			
+
+		ServerCmd.CmdType = 0;
+		ServerCmd.X = (BYTE)lpObj->X;
+		ServerCmd.Y = (BYTE)lpObj->Y;
+		MsgSendV2(lpObj, (LPBYTE)&ServerCmd, sizeof(ServerCmd));
+		DataSend(lpObj->m_Index, (LPBYTE)&ServerCmd, sizeof(ServerCmd));
+		return;
+	}
+	// ...............................................
+  }
+
+- 2003.08.26 (foguy)
+  ▩ 본섭 패치 버전
+	ClientExeVersion	= 0.95.12	
+	ClientExeSerial		= bQxGVgYegf9aENHc
+
+- 2003.08.25 (foguy)
+  ▩ 본섭 패치 버전
+	ClientExeVersion	= 0.95.11
+	ClientExeSerial		= bQxGVgYegf9vENHc
+
+- 2003.08.22 (foguy)
+  ▩ 테섭 패치 버전
+	ClientExeVersion	= 0.95.10
+	ClientExeSerial		= bQLGVgYegf9vENHc
+	
+	GameServer Version = 0.95.20T
+
+- 2003.08.20 (foguy)
+  ▩ 테섭 패치 버전
+	ClientExeVersion	= 0.95.09
+	ClientExeSerial		= 4QLGVgYegf9vENHc
+
+- 2003.08.13 (SaemSong)
+  ▩ 길드 부분을 기존 DBServer에서 분리시킴
+  게임서버에서 분리 루틴을 찾기 위해선 //##EXDB##  를 모두 검색하면 됨
+  #ifdef _NEW_EXDB_  이 문을 주석처리하면 기존 DB로 길드를 처리한다.
+  Protocol/ExDB 폴더 추가및 EDSProtocol.cpp, EDSProtocol.h 추가
+
+- 2003.08.13 (foguy)
+  ▩ 테섭 패치 버전
+	ClientExeVersion	= 0.95.08
+	ClientExeSerial		= 4QLGdgYegf9vENHc
+  
+
+- 2003.08.13 (foguy)
+  ▩ 본섭 버전
+	ClientExeVersion	= 0.95.05
+	ClientExeSerial		= 4zYGWgYagf9ZENyc
+
+  ▩ 테섭 버전 
+	ClientExeVersion	= 0.95.07
+	ClientExeSerial		= 4zLGdgYegf9vENHc
+
+  ▩ 캐릭터 기본 공격력 계산에서 기사 수정
+  (ObjCalCharacter.cpp)
+	gObjCalCharacter()
+	{
+		else if( lpObj->Class == CLASS_KNIGHT )
+		{
+			lpObj->m_AttackDamageMinRight = lpObj->Strength/7;
+			lpObj->m_AttackDamageMaxRight = lpObj->Strength/4;
+			lpObj->m_AttackDamageMinLeft  = lpObj->Strength/7;
+			lpObj->m_AttackDamageMaxLeft  = lpObj->Strength/4;		
+		}
+	}
+
+
+- 2003.07.30 (foguy)
+  ▩ 스킬 및 마법 처리 부분 분리 작업 진행중
+  (ObjUseSkill.h,  ObjUseSkill.cpp)
+  가능한한 스킬 및 마법 처리에 관련된 부분은 이곳에 넣자구요 ...^^
+
+  ▩ 공격 처리 부분 분리 작업 진행중
+  (ObjAttack.h ObjAttack.cpp)  
+  공격 처리 하는 부분은 여기에 넣자~~~
+
+  ▩ 캐릭터 능력치 계산하는 부분 분리 작업 진행중
+  (ObjCalCharacter.h, ObjCalCharacter.cpp)
+
+  ▩ Item.txt : 법서(Type=15) 요구레벨 추가
+				구슬(Type=15) 요구힘, 요구 민첩추가
+
+  ▩ Skill.txt : 어빌리트 포인트 추가				 
+
+- 2003.07.23 (foguy)
+  ▩ 장비가 변경된 후, 현재 마나가 최대 생명보다 크면 원래로 돌린다
+  (user.cpp)
+  void GObjExtItemApply(LPOBJECTSTRUCT lpObj)
+  {
+	// ......................
+	#ifdef APPLY_TESTSERVER
+		if( lpObj->Mana > (lpObj->MaxMana+lpObj->AddMana) )
+		{	// 현재 마나가 최대 생명보다 크면 원래로 돌린다
+			lpObj->Mana = (lpObj->MaxMana+lpObj->AddMana);
+			GCManaSend(lpObj->m_Index, (short)(lpObj->Mana), 0xFF,0);
+		}
+	#endif
+	// ......................
+  }
+
+- 2003.07.23 (foguy)
+  ▩ 아이템 드롭 시간 4분에서 2분으로 수정
+
+  ▩ BP(브레인포인트) 추가시 프로토콜 추가 사항
+	[0xF3][0x03] 선택한 캐릭터로 들어 왔을때
+	WORD		BP;
+	WORD		MaxBP
+
+	[0xF3][0x04] 죽었다가 다시 리젠될때
+	WORD		BP;
+
+	[0xF3][0x05] 유저가 레벨업을 했다
+	WORD		MaxBP;
+
+	[0xF3][0x06] 유저가 레벨업 포인트를 하나 증가 한다고 알리면 결과를 알릴때
+	BYTE	ResultType;	// 4Bit:Result,  4Bit:Type 
+				// 4bit:Type값에 BP포인트 증가에 대한 Type추가
+	WORD	MaxLifeAndMana;	// BP포인트 값
+		
+
+	[0x27]	마나양을 보낸다
+	BYTE		BPH;	// BP값
+	BYTE		BPL;
+
+
+- 2003.07.22 (foguy)
+  ▩ 날개 데미지 증가 법사도 적용가능하게 수정
+  (user.cpp)
+  BOOL gObjAttack(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, CMagicInf *lpMagic, int magicsend, BYTE MSBFlag, int AttackDamage)
+  {
+	//................................
+		if( gObjWingSprite(lpObj) == TRUE )
+		{
+			CItem	*Wing = &lpObj->pInventory[EQUIPMENT_WING];
+
+	#ifndef APPLY_TESTSERVER
+			if( lpObj->Class != CLASS_WIZARD || !skill )
+	#endif
+	//................................
+  }
+  
+
+
+
+  ▩ 마나 자동 증가 3초에 3% 적용 되던 부분 3.7%적용되게 수정
+  (user.cpp)
+  void gObjManaPotionFill(LPOBJECTSTRUCT lpObj)
+  {
+	//................................
+	#ifdef TEST_VERSION
+		tmana += (lpObj->MaxMana+lpObj->AddMana)*0.037f;		
+		
+	#else
+		tmana += (((lpObj->MaxMana)*3)/100);
+	#endif
+	//................................
+  }
+
+  ▩ 몬스터를 죽였을때 얻는 추가 생명/마나 추가 생명/마나 적용되게 수저
+  void gObjMonsterDieLifePlus(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTartObj)
+  {
+	//................................
+#ifdef TEST_VERSION
+	if(lpObj->MonsterDieGetLife)
+		{
+			lpObj->Life += ((lpObj->MaxLife+lpObj->AddLife)/8)*lpObj->MonsterDieGetLife;
+			//LogAddL("Life 추가 옵션 : %d %d", (int)lpObj->Life, (lpObj->MaxLife/8)*lpObj->MonsterDieGetLife);
+		}
+		if(lpObj->MonsterDieGetMana)
+		{
+			lpObj->Mana += ((lpObj->MaxMana+lpObj->AddMana)/8)*lpObj->MonsterDieGetMana;
+		}	
+	#else
+		if(lpObj->MonsterDieGetLife)
+		{
+			lpObj->Life += (lpObj->MaxLife/8)*lpObj->MonsterDieGetLife;
+			//LogAddL("Life 추가 옵션 : %d %d", (int)lpObj->Life, (lpObj->MaxLife/8)*lpObj->MonsterDieGetLife);
+		}
+		if(lpObj->MonsterDieGetMana)
+		{
+			lpObj->Mana += (lpObj->MaxMana/8)*lpObj->MonsterDieGetMana;
+			//LogAddL("Mana 추가 옵션 : %d %d", (int)lpObj->Mana, (lpObj->MaxMana/8)*lpObj->MonsterDieGetMana);
+		}
+#endif
+	//................................
+  }
+
+
+
+- 2003.07.21 (foguy)
+  ▩ 새로운 마법 및 아이템 대조표
+	-기사
+	스킬이름 스킬번호	아이템인덱스
+	유니창 		47			12-13
+	일대일 		43			12-19
+	생명증가	48			12-14
+	분노의일격	42			12-12
+	탈것사격	49			12-20
+
+	-법사
+	소울바리어	16			15-15
+	소환이동	15			15-14
+
+	-요정
+	관통		52			12-17
+	석화		51			12-18
+
+	-마검
+	방어감소	55			12-16
+
+
+- 2003.07.08 (foguy)
+  ▩ 상점 이용시, /이동 명령어 및 마을귀환문서 사용가능하게 수정
+  ▩ 소환몬스터가 있는 상태에서 자신에게 치료마법을 사용하면 소환몬스터의 체력이
+     자신의 체력으로 보이게 되는 버그 수정
+	 ( user.cpp )
+	 void gObjSkillHealing(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, int skill_level)
+	 {
+		// ............................
+		else if( lpTargetObj->m_RecallMon >= 0 )
+		{	// 소환 몬스터일 경우에는 자신의 HP를 알려준다
+			GCRecallMonLife(lpTargetObj->m_RecallMon, (int)lpTargetObj->MaxLife, (int)lpTargetObj->Life);			
+		}
+	 }
+
+
+- 2003.07.07 (foguy)
+  ▩ 아틀란스로 /이동 명령어 사용시 필요 레벨 100 -> 70으로 수정(본섭)
+  ▩ /이동 던전3 추가 , 던전3층 걸어서 이동은 60 -> 50으로
+  (GMMng.cpp)
+  ▩ 마을 귀환 문서 사용시 
+	1. 아틀란스 -> 아틀란스 안전지대
+	2. 타르칸 -> 타르칸 안전지대로 이동하게..
+
+
+- 2003.07.02 (foguy)
+  ▩ 마법 공격 패킷을 보낼때, 마법 순서번호 대신에 스킬 번호로 수정
+  (protocol) 0x1D, 0x1E, 0x19
+#ifdef CHANGE_MAGICATTACKPACKET	// 마법 순서번호 대신에 스킬 번호로 수정
+		lpMagic = gObjGetMagicSearch(lpObj, lpMsg->MagicNumber);
+#else
+		lpMagic = gObjGetMagic(lpObj, lpMsg->MagicNumber);
+#endif
+
+  ▩ 프로토콜 0x19현재 사용하지 않으므로 제외
+
+- 2003.06.26 (foguy)
+  ▩ 중국 공속핵(다중공격-같은 패킷을 여러번 보내는것 수정)체크 수정
+   1. 아쿠아 플래시..체크 뺌
+     -->클라이언트에서 아쿠아 플래시만 공격시리얼을 안만들고 있음
+   2. 악령은 최대 6번까지만 체크 되게 수정
+     --> 악령은 8개가 하나의 시리얼을 사용하므로 공격이 더 많이 됨.
+  (MultiAttackHackCheck.h)
+
+- 2003.06.26 (SaemSong)
+  ▩ 요정이 화살만 차고 물리 공격시 데미지 안들어감
+
+  이전 : else if( (Left->m_Type >= MAKE_ITEMNUM(4,0)) && (Left->m_Type <= MAKE_ITEMNUM(4,6)) || 
+			     (Left->m_Type <= MAKE_ITEMNUM(4,17)) )	// 활을 착용하고 있다면..
+  수정 : else if( (Left->m_Type >= MAKE_ITEMNUM(4,0)) && (Left->m_Type <= MAKE_ITEMNUM(4,6)) || 
+			     (Left->m_Type == MAKE_ITEMNUM(4,17)) )	// 활을 착용하고 있다면..
+
+
+- 2003.06.25 (foguy)
+  ▩ 창고를 한번도 읽지 않았을때는 저장되지 않게 수정
+  ▩ 중국 공속핵(다중공격-같은 패킷을 여러번 보내는것 수정)
+  (MultiAttackHackCheck.h)
+  CMultiAttackHackCheck Class
+
+- 2003.06.17 (foguy)
+  ▩ 타마짱 이벤트 추가 ( 일본 전용 : #define FOR_JAPAN 사용)
+
+- 2003.06.16 (SaemSong)
+  ▩ Quest 버퍼 추가
+    (Sprodef.h)
+	0x06, 0x07
+	BYTE  dbQuest[MAX_DBQUEST];
+	#define MAX_DBQUEST		50            //	초기 50Byte 세팅
+
+
+- 2003.06.16 (foguy)
+  ▩ 과금 종료와 튕처리 메시지 구분 
+  (sprotocol.cpp)
+  (0x09) 튕처리 추가
+  void GJPUserDisconnectRecv(LPSDHP_BILLKILLUSER lpMsg);
+
+
+- 2003.06.11 (foguy)
+  ▩ 이벤트 몹에서 나오는 아이템에서 수호, 사탄, 유니등이 레벨이 붙어서 나오는 버그 수정
+  (Event.cpp)
+	BOOL AttackEvent55BagOpen(LPOBJECTSTRUCT lpObj);
+	BOOL AttackEvent53BagOpen(LPOBJECTSTRUCT lpObj)
+
+  ▩ 기존에 +10, 11만 되면 방어력 5,10%올려주던것에서 세트아이템이 되었을때 방어력 올라가게 수정
+  (user.cpp)
+  gObjCalCharacter();
+
+  ▩ 마나 자동 회복에서 추가 마나는 안올라가는거 수정
+  (user.cpp)
+  // 일정 시간마다 마나를 올려준다.
+  void gObjManaPotionFill(LPOBJECTSTRUCT lpObj);
+
+  ▩ 데빌스퀘어 시작 시간 짝수대 시간에서 홀수대 시간으로 수정
+  (DevilSquare.cpp)
+	void CDevilSquare::CheckSync()
+	{
+		// ......................
+		if( (today->tm_hour%2) == 0 )
+		{
+			m_iRemainTime = 60 - today->tm_min - m_iOpenTime;
+		}
+		else
+		{
+			m_iRemainTime = 120 - today->tm_min - m_iOpenTime;
+		}
+		// ......................
+	}
+	
+
+
+- 2003.06.10 (foguy)
+  ▩ 레나 환전 추가 (protocol 0x98)  
+
+- 2003.05.29 (foguy)
+  ▩ 전투축구 종료후 사용자들을 로랜시아로 강제 이동 되게 수정
+  (user.cpp)
+	void gObjSecondProc()
+	{
+		// ......................
+		if( GroundOutCheck )
+		{
+			int ground = gCheckBattleGround(lpObj);
+			if ( ground >= 0 )
+			{
+				gObjMoveGate(lpObj->m_Index, 17);
+				//gObjTeleport(lpObj->m_Index, 6, 72, 161);
+			}
+		}
+		// ......................
+	}
+
+- 2003.05.28 (foguy)
+  ▩ 요정날개 생명 회복 옵션 적용되지 않는 버그 수정
+  (user.cpp)
+  -- 내구도 검사 및 생명 회복을 시켜 주는 부분에서 목걸이로 설정되어 잇었다
+  void gObjRestPotionFill(LPOBJECTSTRUCT lpObj)
+  {
+	// .............................
+		if( lpObj->pInventory[EQUIPMENT_WING].IsItem() == TRUE )
+		{
+			if( lpObj->pInventory[EQUIPMENT_WING].m_Option3 )
+			{
+				if( lpObj->pInventory[EQUIPMENT_WING].m_Special[2] == AT_LIFE_REGENERATION)
+				{
+					if( lpObj->pInventory[EQUIPMENT_WING].m_Durability != 0.f )
+					{
+						percent+=lpObj->pInventory[EQUIPMENT_WING].m_Option3;
+					}
+				}
+			}
+		}
+	// .............................
+  }
+
+
+- 2003.05.27 (foguy)
+  ▩ 천공맵 추가중 (terran11.att)
+	-- MAX_MAP 11로 늘림
+
+  ▩ 일본 영웅시스템 적용 안함(살인마에 대한 제약 적용)
+  (user.cpp)
+  gObjAttack();
+
+  ▩ 젠 드롭 시간 스크립트에서 설정가능하게 수정
+	int gZenDurationTime;
+
+
+- 2003.05.23 (foguy)
+  ▩ 던전 리젠영역 수정 
+	--> 던전 2층자리에서 1층 자리로 수정
+  
+
+- 2003.05.23 (foguy)
+  ▩ 몬스터 스킬 추가 작업중
+
+  ▩ 맵이동 요청이 들어 왔을때, 이동 가능한 곳에서 요청하는지 체크 추가
+	(protocol.cpp)
+	void CGTeleportRecv(LPPMSG_TELEPORT lpMsg, int aIndex)
+	{
+		// ..........................
+		else 
+		{
+			if( gGateC.IsInGate(aIndex, lpMsg->MoveNumber) ) 
+				gObjMoveGate(aIndex, lpMsg->MoveNumber);
+			else
+			{
+				gObjClearViewport(&gObj[aIndex]);
+				GCTeleportSend(&gObj[aIndex], lpMsg->MoveNumber, gObj[aIndex].MapNumber, (BYTE)gObj[aIndex].X, (BYTE)gObj[aIndex].Y, gObj[aIndex].Dir);
+			}
+		}
+		// ..........................
+	}
+
+	(gate.cpp)
+	BOOL CGate::IsInGate(int aIndex, int GateNumber);
+
+
+- 2003.05.21 (foguy)
+  ▩ 황금버지 드래곤 리스폰 시간 100초에서 1200초(2시간)으로 조정 (monster.txt)
+
+  ▩ 길드 공지시 "@>" 공백문자나 아무것도 입력하지 않으면, 공지 출력 안되게 수정
+
+  - 공지시 공백문자 체크
+  (GuildClass.cpp)
+  BOOL	gGuildNoticeStringCheck(char* notice);	
+  
+  - 공지 체크
+  (DSProtocol.cpp)
+	// 사용자 접속시 공지 출력 수정
+	void DGGuildMemberInfo(LPSDHP_GUILDMEMBER_INFO lpMsg)
+	{
+		//' ............................
+		if( strlen(gObj[n].lpGuild->Notice) > 0 )// 길드의 공지가 있다면..
+		{
+			if( gGuildNoticeStringCheck(gObj[n].lpGuild->Notice) )
+			{
+				GCServerMsgStringSend(gObj[n].lpGuild->Notice, n, 2);							
+			}						
+		}
+		//' ............................
+	}
+
+	// 길드 공지 업데이트 받았을때 수정
+	void DGGuildNoticeRecv(LPSDHP_GUILDNOTICE lpMsg)
+	{
+		// ...........
+		strcpy(lpNode->Notice, lpMsg->szGuildNotice);
+		LogAddTD(lMsg.Get(444), lpMsg->GuildName, lpMsg->szGuildNotice);
+
+		if( !gGuildNoticeStringCheck(lpNode->Notice) )
+		{
+			return;
+		}
+		// ...........
+	}
+
+	// 길드 저장할때 "@>"만 입력하면 공백으로 만들어서.. 길드 공지 없게 만든다
+	void GDGuildNoticeSave(char *guild_name, char *guild_notice)
+	{
+		// ..............
+		len = strlen( guild_notice );
+		if( len < 1 )
+		{
+			guild_notice[0] = ' ';
+			guild_notice[1] = 0;		
+		}
+		// ..............
+	}
+
+
+- 2003.05.12 (foguy)
+  ▩ 공속 체크시 패널티 적용 및 일정체크수를 넘으면 게임 강제 종료 코드 추가
+  (user.h)
+  typedef struct{
+		// ........................
+	  DWORD	m_DetectedHackKickCount;			// 공격속도가 이상하게 들어온 수	
+	  DWORD	m_SpeedHackPenalty;		// 공격속도가 이상하게 들어온 수
+		// ........................
+  } OBJECTSTRUCT, *LPOBJECTSTRUCT;
+
+  (gamemain.cpp)
+  int			gDetectedHackKickCount = 10;			// 스피드핵 감지시 퇴출시킬 카운트
+  int			gIsKickDetecHackCountLimit = 0;			// 스피드핵 감지시 퇴출시키는가?
+
+- 2003.05.10 (foguy)
+  ▩ 사각영역을 검사하는 함수 추가
+  (user.cpp)
+  BOOL gObjCheckTileArea(int aIndex, int x, int y, int dis)
+
+  ▩ 경험치를 분배할 Obj를 검사할때, 거리가 먼 사용자를 검사하는 방식 변경(사각영역만 체크)
+
+	int gObjMonsterHitDamageUserDel(LPOBJECTSTRUCT lpObj)
+	{
+		// ..................
+		if( gObjCheckTileArea(	lpObj->m_Index, gObj[lpObj->sHD[n].number].X, gObj[lpObj->sHD[n].number].Y, 20) == FALSE )
+		{
+			delok = 1;	// 뷰 포트에 없다.
+		}
+		// ..................
+	}
+
+  ▩ 몬스터가 리젠될때, 적당한 위치를 못찾은 경우 죽였다가 다시 찾는다
+  (gObjMonster.cpp)
+  BOOL gObjMonsterRegen(LPOBJECTSTRUCT lpObj)
+  {
+	//..................
+		if( !gMSetBase.GetBoxPosition(lpObj->MapNumber, 10, 10, 240, 240, lpObj->X, lpObj->Y) )
+		{
+			lpObj->Live	   = 0;
+			lpObj->m_State   = OBJST_DYING;	
+			lpObj->RegenTime = GetTickCount();
+			lpObj->DieRegen  = 1;
+			return FALSE;
+		}
+	//..................
+  }
+
+
+
+- 2003.05.09 (foguy)
+  ▩ 아이템 정보를 읽을때, type 14(물약및일반아이템류)의 내구도를 1로 설정
+	- 몬스터에게 떨어진 물약류는 내구도가 0으로 설정되어져서 겹쳐지지않는다.
+  (zzzItem.cpp)
+	BOOL OpenItemScript(char *FileName)
+	{
+		// ....................
+		if(Type==14)
+		{					
+			Token = (*GetToken)();p->Value = (int)TokenNumber;
+			Token = (*GetToken)();p->Level = (int)TokenNumber;			
+			p->Durability = 1;
+		}
+		// ....................
+	}
+
+  ▩ 팅처리 되었을때, "운영자에 의해 게임이 종료됩니다" 메시지 출력 되게 수정
+  void GJPUserKillRecv(LPSDHP_BILLKILLUSER lpMsg)
+  {
+		// .................................
+		if( gObjIsAccontConnect(number, szId) == FALSE )
+		{
+			return;
+		}
+
+		GCServerMsgStringSend("운영자에 의해 게임이 종료됩니다", number, 0);
+		gObjUserKill(number);
+  }
+
+  ▩ 몬스터 아이템 드롭 로그 수정 : 모든 아이템 정보가 표시되게.
+  (DSProtocol.cpp)
+  void ItemSerialCreateRecv(LPSDHP_ITEMCREATERECV lpMsg);
+
+
+
+- 2003.05.07 (SaemSong)
+  ▩ bCanWarehouseLock 창고 잠금을 사용할지 안할지 결정 (추후 옵션에 넣을까?)
+
+- 2003.05.01 (foguy)
+  ▩ MAX_OBJECT 값 수정 및 Object 할당 방식 변경
+	(define.h)
+	#define MAX_OBJECT					4600
+
+	#define MAX_MONSTER					3000
+	#define MAX_CALLMONSTER				600
+	#define MAX_USER					1000
+
+	#define ALLOC_USEROBJECTSTART		MAX_MONSTER+MAX_CALLMONSTER	// 게임서버의 최대 오브젝트(유저) 수
+
+	(user.cpp)
+	short gObjAddSearch(SOCKET aSocket,char *ip);
+	short gObjAdd();
+	short gObjAddCallMon();
+
+  ▩ 캐릭터가 몬스터에게 죽고 마을에서 다시 한번더 죽는 버그 수정 
+	- 원인 : 몬스터에게 죽는 시점에서 클라이언트로 부터 이동명령이 와서 PathCount의 값이 0이 
+	         아닐때, 마을로 리젠이이 되고, 좌표를 수정된 후,  Path값에 따라 원래 죽은 자리에서 부터
+			 이동이 되어서.. 다시한번도 죽게 되었다.
+
+	- 캐릭터가 죽고, 리젠되는 시점에서 PathCount를 0으로 만들었다
+	(user.cpp)
+	void gObjSetState()
+	{
+		// ......................................
+		MapC[lpObj->MapNumber].GetMapPos(lpObj->MapNumber, lpObj->X, lpObj->Y );
+		// ......................................
+		pMsg.MapNumber    = lpObj->MapNumber;
+		pMsg.Money		  = lpObj->Money;
+		lpObj->PathCount  = 0;
+		
+		DataSend(n, (LPBYTE)&pMsg, pMsg.h.size);
+		// ......................................
+	}
+
+  ▩ 창고가 잠겨 있을때, 사용료 (레벨*200) 추가
+
+
+- 2003.04.30 (SaemSong)
+  ▩ 창고 잠금때 주민번호 뒷자리 입력 받게 추가
+
+- 2003.04.29 (foguy)
+  ▩ 아이템의 요구힘, 요구민첩이 BYTE로 되어있어서 정상적으로 체크가 되지 않았다.
+   zzzItem.h
+	class CItem
+	{
+		// ...........................
+		WORD  m_RequireStrength;
+		WORD  m_RequireDexterity;
+		WORD  m_RequireEnergy;
+		WORD  m_RequireLevel;
+		// ...........................
+	};
+
+
+- 2003.04.28 (foguy)
+  ▩ 카오스창을 열기 전에 아이템로그를 남기게 수정
+  (protocol.cpp) 
+	void CGTalkRequestRecv(LPPMSG_TALKREQUEST lpMsg, int aIndex)
+	{
+		// .....................
+		else if( ShopNum == 12 )
+		{
+			if( bCanChaosBox == TRUE )
+			{
+				lpObj->m_IfState.type   = I_CHAOSBOX;
+				lpObj->m_IfState.state	= 0;
+				pResult.result     = 0x03;
+				DataSend(aIndex, (LPBYTE)&pResult, pResult.h.size);
+				gObjInventoryTrans(lpObj->m_Index);
+				LogAddTD("[%s][%s] Open Chaos Box", lpObj->AccountID, lpObj->Name);
+				gObjItemTextSave(lpObj);
+				gObjWarehouseTextSave(lpObj);
+			}
+		// .....................
+	}
+
+- 2003.04.22 (foguy)
+  ▩ 전투축구 중에 이동할수 없게 수정
+  (GMMng.cpp)
+	int CGMMng::ManagementProc(LPOBJECTSTRUCT lpObj, char* szCmd, int aIndex)
+	{
+		// ................................
+		// 전투축구 중에는 이동할수 없게 한다
+		if( gObj[aIndex].lpGuild && gObj[aIndex].lpGuild->lpTargetGuildNode )
+		{					
+			if( gObj[aIndex].lpGuild->BattleGroundIndex >= 0 && gObj[aIndex].lpGuild->WarType == 1)
+			{
+				return 0;
+			}					
+		}
+		// ................................
+	}
+
+
+
+- 2003.04.22 (foguy)
+  ▩ 클라이언트에서 넘어온 공속을 체크할때.. 3번 체크 되게.. 수정
+  (protocol.cpp)
+  void CGLiveClient(LPPMSG_CLIENTTIME lpClientTime, short aIndex)
+  {
+  // ....................
+	if( gObj[aIndex].Connected == CSS_GAMEPLAYING )
+	{	// 게임중일때만 체크
+		if( gObj[aIndex].m_AttackSpeed < lpClientTime->AttackSpeed || 
+		gObj[aIndex].m_MagicSpeed < lpClientTime->MagicSpeed )
+		{
+			LogAddC(LOGC_RED, "[%s][%s][%s] ClientHack Detected : Editing AttackSpeed [%d][%d] [%d][%d]", 
+					gObj[aIndex].AccountID, gObj[aIndex].Name, gObj[aIndex].Ip_addr,
+					gObj[aIndex].m_AttackSpeed,lpClientTime->AttackSpeed,
+					gObj[aIndex].m_MagicSpeed,lpClientTime->MagicSpeed);
+
+			gObj[aIndex].m_AttackSpeedHackDetectedCount++;
+
+			if( gObj[aIndex].m_AttackSpeedHackDetectedCount > 3)
+			{
+				CloseClient(aIndex);
+			}
+		}
+		else
+		{
+			gObj[aIndex].m_AttackSpeedHackDetectedCount = 0;
+		}
+	}
+  // ....................
+  }
+
+  ▩ 지팡이 일반 공격 데미지 적용안되는것 적용되게 수정(내구도감소는 마밥사용할때와 동일)
+  (zzzItem.cpp)
+  void CItem::Convert( int type, BYTE Option1, BYTE Option2, BYTE Option3, BYTE Attribute2, BYTE DbVersion )
+  {
+	// ..........................
+	if( m_Type != ITEM_BOW+7 && m_Type != ITEM_BOW+15 )
+	{	// 화살, 석궁용화살이 아니면
+		m_DamageMinOrigin = m_DamageMin;
+		m_DefenseOrigin = m_Defense;
+		m_Magic =  m_DamageMin;
+
+		m_DamageMin -= (WORD)(m_DamageMin*m_CurrentDurabilityState);
+		m_DamageMax -= (WORD)(m_DamageMax*m_CurrentDurabilityState);
+		m_Defense -= (WORD)(m_Defense*m_CurrentDurabilityState);
+
+		m_SuccessfulBlocking -= (BYTE)(m_SuccessfulBlocking*m_CurrentDurabilityState);
+	}
+
+	if( m_Durability == 0.f )
+	{	// 내구도가 0이면 저항력도 없다
+		memset(m_Resistance, 0, MAX_RESISTANCE);
+	}
+  }
+
+  (user.cpp)
+	void gObjWeaponDurDown(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, int type)
+	{
+		// ...............................
+		//지팡이
+		else if( Right->m_Type >= ITEM_STAFF && Right->m_Type < ITEM_SHIELD )
+		{	
+			ret = Right->StaffWeaponDurabilityDown(itargetdefence, lpObj->m_Index);
+
+			if( ret )
+			{
+				GCItemDurSend(lpObj->m_Index, EQUIPMENT_WEAPON_RIGHT, Right->m_Durability, 0);
+				if( ret == 2 )
+				{
+					gObjCalCharacter(lpObj->m_Index);
+				}
+			}
+		}
+		// ...............................
+	}
+
+
+- 2003.04.18 (foguy)
+  ▩ 엑설런트 옵션 : 공격력 +2%가 4%로 적용되는것 2%로 적용되게 수정
+  (zzzItem.cpp)
+  int CItem::IsExtAttackRate2()
+  {
+	if( (m_NewOption&0x08) == 0x08 ) return 2;	
+	return 0;
+  }
+
+  ▩ 엑설런트 공격력 +2% , 레벨/20은 왼손,오른손 무기의 경우 각각의 손에만 적용, 불의 목걸이는 모두 적용..
+  (user.cpp)
+	void GObjExtItemApply(LPOBJECTSTRUCT lpObj)
+	{
+		// ............................
+		// 공격력 증가 + 레벨/20
+		if( n == EQUIPMENT_WEAPON_RIGHT || n == EQUIPMENT_AMULET )
+		{
+			lpObj->m_AttackDamageMinRight	+= lpObj->Level/20;
+			lpObj->m_AttackDamageMaxRight	+= lpObj->Level/20;
+		}
+		else if( n == EQUIPMENT_WEAPON_LEFT || n == EQUIPMENT_AMULET )
+		{
+			lpObj->m_AttackDamageMinLeft	+= lpObj->Level/20;
+			lpObj->m_AttackDamageMaxLeft	+= lpObj->Level/20;
+		}
+		// ............................
+		// 공격력 증가, 마력 증가 + 2%
+		if( n == EQUIPMENT_WEAPON_RIGHT || n == EQUIPMENT_AMULET )
+		{
+			lpObj->m_AttackDamageMinRight+= lpObj->m_AttackDamageMinRight*lpObj->pInventory[n].IsExtAttackRate2()/100;
+			lpObj->m_AttackDamageMaxRight+= lpObj->m_AttackDamageMaxRight*lpObj->pInventory[n].IsExtAttackRate2()/100;
+		}
+		else if( n == EQUIPMENT_WEAPON_LEFT || n == EQUIPMENT_AMULET )
+		{
+			lpObj->m_AttackDamageMinLeft += lpObj->m_AttackDamageMinLeft*lpObj->pInventory[n].IsExtAttackRate2()/100;
+			lpObj->m_AttackDamageMaxLeft += lpObj->m_AttackDamageMaxLeft*lpObj->pInventory[n].IsExtAttackRate2()/100;
+		}
+		// ............................
+	}
+
+  ▩ 메달 이벤트 추가
+  (event.cpp)
+  void GoldMedalOpenEven(LPOBJECTSTRUCT lpObj);
+  void SilverMedalOpenEven(LPOBJECTSTRUCT lpObj);
+
+  ▩ item.txt skill.txt 읽는 방식 변경 
+	- 기존에는 해각 나라별로 각각 다른 item(국가코드).txt skill(국가코드).txt를 가지고 있었고,
+	  수정은 수치 정보는 한국걸 다 읽고 이름 정보만 나라별로 읽게 수정 
+ 
+   (GameMain.cpp)
+   void ReadCommonServerInfo()
+   {
+		// ....................................
+		strcpy(szKorItemTextFileName, gDirPath.GetNewPath("lang\\kor\\item(kor).txt"));
+		strcpy(szKorSkillTextFileName, gDirPath.GetNewPath("lang\\kor\\skill(kor).txt"));
+
+		switch( gLanguage ) 		
+		// ....................................
+		// 먼저 한국의 정보를 읽고 
+		if( OpenItemScript(szKorItemTextFileName) == FALSE )
+			MsgBox(lMsg.Get(419));
+
+		if( gLanguage != 0 )
+		{	// 해외 버전의 경우에는 아이템 이름만 다시 로드한다
+			if( OpenItemNameScript(szItemTextFileName) == FALSE )
+				MsgBox(lMsg.Get(419));
+		}
+		
+		
+		MagicDamageC.LogSkillList(szKorSkillTextFileName);
+
+		if( gLanguage != 0 )
+		{	// 해외 버전의 경우에는 스킬 이름만 다시 로드한다
+			MagicDamageC.LogSkillNameList(szSkillTextFileName);
+		}
+		// ....................................
+   }
+
+   (zzzItem.cpp)
+	//----------------------------------------------------------------------------
+	// 해외판을 위해서 기존에 로드한 아이템 정보에 아이템 이름만 바꾼다
+	//----------------------------------------------------------------------------
+	BOOL OpenItemNameScript(char *FileName);
+
+   (MagicDamage.cpp)
+   // 해외판을 위해서 스킬이름만 얻어 온다
+	void CMagicDamage::LogSkillNameList(char *filename)
+
+
+- 2003.04.17 (foguy)
+  ▩ 아이템을 떨어뜨렸을 때 본인 외에 다른 캐릭터가 주울수 없게 수정될때, 물약 및 화살 시리즈는 안되게 수정
+  (protocol.cpp)
+	BOOL CGItemDropRequest(LPPMSG_ITEMTHROW lpMsg, int aIndex, int drop_type)
+	{
+		// ..................................
+		int aAntiLootIndex = aIndex;
+		if( ( type >= MAKE_ITEMNUM(14, 0) && type <= MAKE_ITEMNUM(14, 10) ) || 
+			type == MAKE_ITEMNUM(4, 7) || 
+			type == MAKE_ITEMNUM(4, 15) )
+		{
+			aAntiLootIndex = -1;
+		}
+
+		if( MapC[map_num].ItemDrop(type, level, dur, lpMsg->px, lpMsg->py, Option1, Option2, Option3, NOption, item_number, aAntiLootIndex) == TRUE )
+		// ..................................
+	}
+
+  ▩ 아이템 블럭시 화살은 장착되게 수정
+  (user.cpp)
+  void CGInventoryItemMove(LPPMSG_INVENTORYITEMMOVE lpMsg, int aIndex)
+  {
+	// ......................................
+	if( gObjCanItemTouch(lpObj, it_type) == FALSE )	// 아이템을 이동할 수 없다면
+	{
+		// 아이템 블럭시에 화살은 이동되게 한다
+		if( lpMsg->sItemInfo[0] == MAKE_ITEMNUM(4, 7) || lpMsg->sItemInfo[0] == MAKE_ITEMNUM(4, 15) )
+		{
+			if( (target >= MAX_EQUIPMENT || source < MAX_EQUIPMENT) )
+			{			
+				GCItemMoveResultSend(aIndex, 0xFF, 0, ItemInfo);
+				return;
+			}
+		}	
+		else
+		{
+			GCItemMoveResultSend(aIndex, 0xFF, 0, ItemInfo);
+			return;
+		}
+	}
+	// ......................................
+  }	
+
+
+- 2003.04.16 (foguy)
+  ▩ 환수드래곤 및 황금버지드래곤 아이템 떨어 뜨릴때 Anti Looting 적용되게 수정
+
+  ▩ 아이템을 떨어뜨렸을 때 본인 외에 다른 캐릭터가 주울수 없게 수정
+  (protocol.cpp)
+  BOOL CGItemDropRequest(LPPMSG_ITEMTHROW lpMsg, int aIndex, int drop_type)
+  {
+	// ..................................
+	if( MapC[map_num].ItemDrop(type, level, dur, lpMsg->px, lpMsg->py, Option1, Option2, Option3, NOption, item_number, aIndex) == TRUE )
+	// ..................................
+  }
+
+  ▩ 클라이언트와 서버사이의 TickCount를 검사 할때.. 20분마다 클라이언트의 TickCount를 초기하되게 변경
+  void CGLiveClient(LPPMSG_CLIENTTIME lpClientTime, short aIndex)
+  {
+	// ..................................
+		gObj[aIndex].CheckTickCount++;
+		if( gObj[aIndex].CheckTickCount > 60 ) 
+		{	// 20분 마다 한번씩 클라이언트 틱을 클라이언트와 맞춰 준다 20초에 한번씩 오게 되므로, 60..
+			gObj[aIndex].CheckTick = lpClientTime->Time;
+			gObj[aIndex].CheckTickCount = 0;
+		}
+	// ..................................
+  }
+
+- 2003.04.10 (foguy)
+  ▩ 데빌 스퀘어 아이템 초청권 성공 확률 조정 
+  - 기존 : 1-2광장 : 40%  3-4광장 : 30 .. 광장 구분 없는것 (30%)
+  - 수정 : 1광장 : 80% 2광장 : 75%  3광장 : 70% 4광장 : 60% 광장구분 없는것(60%)
+  (ChaosBox.cpp)
+  BOOL	DevilSquareEventChaosMix(LPOBJECTSTRUCT lpObj, BOOL bCheckType, int iItemLevel)
+  {
+	// ...............................
+	  switch(iItemLevel)
+	  {
+		case 0:
+			lpObj->ChaosSuccessRate = 60;
+			nChaosNeedMoney = 10000;
+		break;
+
+		case 1:
+			lpObj->ChaosSuccessRate = 80;
+			nChaosNeedMoney = 10000;
+		break;
+
+		case 2:
+			lpObj->ChaosSuccessRate = 75;
+			nChaosNeedMoney = 20000;
+		break;
+
+		case 3:
+			lpObj->ChaosSuccessRate = 70;
+			nChaosNeedMoney = 40000;
+		break;
+
+		case 4:
+			lpObj->ChaosSuccessRate = 60;
+			nChaosNeedMoney = 70000;
+		break;
+	// ...............................
+  }
+
+- 2003.04.09 (SaemSong)
+  ▩ 창고 비밀번호 기능 추가 (테스트중)
+
+- 2003.04.09 (foguy)
+  ▩ 유니리아의 내구도가 다 달아서 없어 졌을때, 뷰포트 정보가 갱신 되지 않는 버그 수정
+  (user.cpp)
+	void gObjSpriteDamage(LPOBJECTSTRUCT lpObj, int damage)
+	{
+		// ......................................
+		if( send_dur )
+		{
+			GCItemDurSend(lpObj->m_Index, EQUIPMENT_HELPER, (BYTE)sprite->m_Durability, 0);
+			if( sprite->m_Durability < 1 )
+			{
+				LogAddTD(lMsg.Get(522), lpObj->AccountID, lpObj->Name, lpObj->pInventory[EQUIPMENT_HELPER].GetName(), lpObj->pInventory[EQUIPMENT_HELPER].m_Level);
+				lpObj->pInventory[EQUIPMENT_HELPER].Clear();
+				GCInventoryItemDeleteSend(lpObj->m_Index, EQUIPMENT_HELPER, 0);
+
+				gObjMakePreviewCharSet(lpObj->m_Index);
+				GCEquipmentChange(lpObj->m_Index, EQUIPMENT_HELPER);			
+			}
+		}
+	}
+
+  (zzzItem.cpp)
+	// 몬스터 죽였을때 얻는 생명 + 생명/8
+	int CItem::IsExtMonsterDieLife()
+	{
+		if( (m_NewOption&0x02) == 0x02 ) return 1;
+		return 0;
+	}
+
+	// 몬스터 죽였을때 얻는 마나 + 마나/8
+	int CItem::IsExtMonsterDieMana()
+	{
+		// 방패면 엑설런트 데미지를 적용하지 않는다.
+		if( m_Type >= ITEM_SHIELD && m_Type < ITEM_HELM ) return 0;
+
+		if( (m_NewOption&0x01)  == 0x01 ) return 1;
+		return 0;
+	}
+
+  ▩ 엑셀 옵션 몬스터얻는 생명(마나) + 생명(마나)/8 적용 수정
+  -- 기존
+  void gObjMonsterDieLifePlus(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTartObj)
+  {
+	// ..........................
+	lpObj->Life += (lpObj->MonsterDieGetLife+lpObj->MaxLife)/8;
+		LogAddL("Life 추가 옵션 : %d %d", (int)lpObj->Life, ((lpObj->MonsterDieGetLife+lpObj->MaxLife)/8));
+	}
+	if(lpObj->MonsterDieGetMana)
+	{
+		lpObj->Mana += (lpObj->MonsterDieGetMana+lpObj->MaxMana)/8;
+	// ..........................
+  }
+
+  -- 수정
+  void gObjMonsterDieLifePlus(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTartObj)
+  {
+	// ..........................
+	if(lpObj->MonsterDieGetLife)
+	{
+		lpObj->Life += (lpObj->MaxLife/8)*lpObj->MonsterDieGetLife;
+		LogAddL("Life 추가 옵션 : %d %d", (int)lpObj->Life, ((lpObj->MonsterDieGetLife+lpObj->MaxLife)/8));
+	}
+	if(lpObj->MonsterDieGetMana)
+	{
+		lpObj->Mana += (lpObj->MaxMana/8)*lpObj->MonsterDieGetMana;
+	// ..........................
+  }
+
+- 2003.04.08 (foguy)
+  ▩ 프로토콜 수정
+  - 거래 요청시 대상의 길드번호가 필요하다
+	// CS [0x37] 물건 교환에 응할 것 인지 알린다. (교환하고자 했던 유저에게)
+	typedef struct
+	{
+		PBMSG_HEAD	h;
+		BYTE		Response;
+		BYTE		Id[MAX_IDSTRING];
+		WORD		Level;		// 레벨 추가
+		int			GuildNumber;		// 길드 번호 추가
+	} PMSG_TRADE_RESPONSE, *LPPMSG_TRADE_RESPONSE;
+	- BOOL GCTradeResponseSend(BYTE response, int aIndex, char* id, WORD level, int GuildNumber);
+
+  ▩ 공격할때 같은 맵이 아니면 공격이 안되게 수정
+  BOOL gObjAttack(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, CMagicInf *lpMagic, int magicsend, BYTE MSBFlag, int AttackDamage)
+  {
+		if( lpObj->MapNumber != lpTargetObj->MapNumber )
+		{	// 같은 맵이 아니면, 
+			return FALSE;
+		}
+  }  
+
+- 2003.04.07 (foguy)
+  ▩ 타르칸에서 변신 반지 && 유니리아를 타고 있을때, 아틀란스로 들어 갈수 있는 버그 수정
+	(user.cpp)
+	BOOL gObjMoveGate(int aIndex, int gt)
+	{
+		// ..................................
+		if( mapNumber == 7 )
+		{	// 아틀란스로 이동 할경우 유니리아를 타면 이동할수 없다
+			if( lpObj->pInventory[EQUIPMENT_HELPER].IsItem())
+			{							
+				if( lpObj->pInventory[EQUIPMENT_HELPER].m_Type == MAKE_ITEMNUM(13,2) )
+				{
+					GCServerMsgStringSend(lMsg.Get(702), lpObj->m_Index, 1);
+					x = lpObj->X;
+					y = lpObj->Y;
+					mapNumber = lpObj->MapNumber;
+					dir  = lpObj->Dir;
+					movefail = 1;
+					GCTeleportSend(&gObj[aIndex], gt, mapNumber, (BYTE)gObj[aIndex].X, (BYTE)gObj[aIndex].Y, gObj[aIndex].Dir);
+					gObj[aIndex].RegenOk   = 1;
+					return FALSE;
+				}
+			}
+		}
+		// ..................................
+	}
+
+  ▩ 명령어 추가 - Admin 명령어
+  (GMMng.cpp) 
+  GMCMD_USERSTAT : /접속현황 [StartLevel = 0] [EndLevel = MAX_LEVEL]
+	--> 현재 서버내의 클래스 분포도를 보여준다
+  GMCMD_USERTRAKING : /추적 [CharacterName]
+	--> 대상캐릭터로 이동한다
+
+  ▩ 게이트 판별 수정
+	BOOL CGate::IsGate(int GateNumber)
+	{
+		if( GateNumber < 0 || GateNumber > MAX_GATE-1 ) 
+		{
+			LogAdd(lMsg.Get(451),GateNumber, __FILE__, __LINE__);
+			return FALSE;
+		}
+
+		if( m_This[GateNumber] == 0xFF ) {
+			LogAdd(lMsg.Get(452),__FILE__, __LINE__);
+			return FALSE;
+		}
+		return TRUE;
+	}
+
+
+  ▩ 로그 메시지가 잘못되었다
+    (user.cpp)
+	- 메시지 545 값  
+	Can't find gate number. %d (%s %d)
+
+	void gObjMoveGate(int aIndex, int gt)
+	{
+		//LogAdd(lMsg.Get(545), __FILE__, __LINE__, gt);	<-- 이전
+		LogAdd(lMsg.Get(545), gt, __FILE__, __LINE__);	<-- 수정
+	}
+
+  ▩ (user.cpp)
+     void gObjMoveGate(int aIndex, int gt) 에서 
+	 BOOL gObjMoveGate(int aIndex, int gt)으로 변경 (이동 성공 여부 판단을 위해)
+	 {
+		// ....................................
+		if( gObj[aIndex].RegenOk ) 
+		{
+			LogAdd("Regen OK %s %d", __FILE__, __LINE__);
+			x = lpObj->X;
+			y = lpObj->Y;
+			mapNumber = lpObj->MapNumber;
+			dir  = lpObj->Dir;
+			movefail = 1;		
+			GCTeleportSend(&gObj[aIndex], gt, mapNumber, (BYTE)gObj[aIndex].X, (BYTE)gObj[aIndex].Y, gObj[aIndex].Dir);
+			gObj[aIndex].RegenOk   = 1;
+			return FALSE;
+		}
+		// ....................................
+	 }
+
+  ▩ 이동 실패시 로그 추가
+  (GMMng.cpp)
+  int CGMMng::ManagementProc(LPOBJECTSTRUCT lpObj, char* szCmd, int aIndex)
+  {
+	// ......................................
+	LogAdd("[%s][%s] Instant move command fail m_number = %d", lpObj->AccountID, lpObj->Name, m_number); //"[%s][%s] 이동 명령어 실패
+	// ......................................
+  }
+
+- 2003.04.04 (SaemSong)
+  ▩ 게임서버가 데이터서버에 접속시 길드리스트를 보두 받은 후 게임서버 시작을 한다.
+     이때 길드리스트 상태가 다이얼로그 박스로 출력된다.
+  ▩ 게임서버 윈도우를 최대크기로 시작한다.
+
+- 2003.04.03 (foguy)
+  ▩  마법리스트 보낼때,  삭제 하나만 보내는것 기존에는 
+    Count의 값이 마법개수 0xFF 이면 한 개 삭제,  0xFE면 하나 추가, 그 외면 전체 리스트의수가 되게 수정
+
+	(protocol.cpp)
+	// [0xF3][0x11]
+	void GCMagicListOneSend(int aIndex, char Pos, BYTE type, BYTE level, BYTE skill )
+	{
+		pCount.Count        = 0xFE;	// 카운트가 0xFF 이면 삭제를 알린다.
+	}	
+	
+	void GCMagicListOneDelSend(int aIndex, char Pos, BYTE type, BYTE level, BYTE skill )
+	{
+		// ......................................
+			pCount.Count        = 0xFF;	// 카운트가 0xFF 이면 삭제를 알린다.
+		// ......................................
+	}
+
+  ▩  /전투종료 명령어는 전투축구일때만 적용되어야 된다
+  (GMMng.cpp)
+  int CGMMng::ManagementProc(LPOBJECTSTRUCT lpObj, char* szCmd, int aIndex)
+  {
+		// ..............................
+		if( gObj[aIndex].lpGuild && gObj[aIndex].lpGuild->lpTargetGuildNode )
+			{
+				if( strcmp( gObj[aIndex].Name, gObj[aIndex].lpGuild->Names[0] ) == 0 )
+				{
+					if( gObj[aIndex].lpGuild->BattleGroundIndex >= 0 && gObj[aIndex].lpGuild->WarType == 1)
+					{
+		// ..............................
+  }
+
+  ▩  /전투종료에 의해서 전투축구가 종료 되었을때, 양팀 모두 점수가 없을 경우, 무승부 처리가 된다
+  (protocol.cpp)
+  void GCManagerGuildWarEnd(char *GuildName)
+  {
+	// ............................
+	if( lpNode->PlayScore == 0  &&  lpNode->lpTargetGuildNode->PlayScore == 0 )
+	{	// 점수가 같을때는 무승부 처리
+		r1 = 0x06;
+		r2 = 0x06;
+	}
+	else
+	{
+		r1 = 0x00;
+		r2 = 0x01;
+	}			
+	// ............................
+  }
+
+- 2003.04.02 (foguy)
+  ▩  PKLevel를 감소 할때, 타이머에 의해서 들어온 함수에서 1초에 하나씩 감소 되지 않고,
+      별도의 시간 체크 변수를 두어서 감소 될수 있게 수정
+	void gObjPkDownTimeCheck(LPOBJECTSTRUCT lpObj, int TargetLevel)
+	{
+		if( lpObj->m_PK_Level == PK_LEVEL_DEFAULT ) return;
+
+		DWORD dwtime = ((GetTickCount()-lpObj->m_dwPKTimer)/1000)*gPkTime;
+		if( dwtime > 5 )
+		{
+		dwtime = 2;
+		lpObj->m_dwPKTimer = GetTickCount();
+		}
+		else
+		{
+		lpObj->m_dwPKTimer = + dwtime*1000;
+		}
+
+		if( TargetLevel < 2 ) lpObj->m_PK_Time+=dwtime;
+		// .....................................
+	}
+
+- 2003.04.01 (foguy)	
+  ▩  전쟁상태를 길드원들에게 전달할때.. 길전에서는 파티 체크를 하지 않는다
+  (protocol.cpp)
+	void GCGuildWarRequestSendRecv(LPPMSG_GUILDWARSEND_RESULT lpMsg, int aIndex)
+	{
+		// .........................................
+		// 길드원의 경우엔 파티원만 호출한다.
+		if( n > 0 )
+		{
+			if( lpMyNode->WarType == BTT_SOCCER )
+			{
+				if( gObj[lpMyNode->Index[0]].PartyNumber >= 0 )
+				{
+					if( gObj[lpMyNode->Index[0]].PartyNumber == gObj[lpMyNode->Index[n]].PartyNumber )
+					{
+						g_call = 1;
+					}
+				}
+			}
+			else
+			{
+				g_call = 1;
+			}
+		}
+		// .........................................
+	}
+
+  ▩  아이템을 착용할수 있는지 체크할때.. 날개류가 빠져 있었다   
+  BOOL gObjIsItemPut(LPOBJECTSTRUCT lpObj, CItem *lpItem, int pos)
+  {
+	// .....................................
+	else if( lpItem->m_Type >=  MAKE_ITEMNUM(12,0) && lpItem->m_Type <=  MAKE_ITEMNUM(12,2))	
+	{	// 날개는 레벨만 체크
+		if( lpObj->Level < lpItem->m_RequireLevel ) return FALSE;
+
+		//if( lpObj->Strength < lpItem->m_RequireStrength ) return FALSE;
+		//if( lpObj->Dexterity< lpItem->m_RequireDexterity) return FALSE;
+	}
+	// .....................................
+   }
+
+  ▩ 전투 축구 수정
+   - 길드 마스터가 살인마인 경우에는 전투 축구 및 길전이 안된다
+   (protocol.cpp)
+   void GCGuildWarRequestResult(char *GuildName, int aIndex, int type)
+   {
+		// ....................................
+		if( gObj[aIndex].m_PK_Level >= 6 )
+		{	// 살인마는 전쟁을 선포할 수 없다
+			pMsg.Result     = 0x04;
+			LogAdd("Error on declaring war : GuildMaster Is Murderer 0x04 %s %s",lpMyGuild->Names[0], gObj[aIndex].Name);
+			DataSend(aIndex, (LPBYTE)&pMsg, pMsg.h.size);
+			return;
+		}
+		// ....................................
+			if( strcmp(gObj[n].Name, lpNode->Names[0] ) == 0 ) // 길마일떈..
+			{
+				if( gObj[n].m_PK_Level >= 6 )
+				{	// 살인마가 길드 마스터 인경우 전쟁을 할수 없다
+					pMsg.Result     = 0x04;
+					LogAdd("Error on declaring war : Target GuildMaster Is Murderer 0x04 %s %s",lpMyGuild->Names[0], gObj[aIndex].Name);
+					DataSend(aIndex, (LPBYTE)&pMsg, pMsg.h.size);
+					return;
+				}
+
+				warmaster = n;
+				break;
+			}
+		// ....................................
+   }
+
+	- 살인마의 경우 경기장으로 이동할수 없게 수장
+   void GCGuildWarRequestSendRecv(LPPMSG_GUILDWARSEND_RESULT lpMsg, int aIndex)
+   {
+		// ....................................
+		if( gObj[lpMyNode->Index[n]].m_PK_Level < 6 )
+		{	// 살인마는 경기장으로 이동 시킬수 없다
+			gObjTeleport(lpMyNode->lpTargetGuildNode->Index[n], 6, x++, 164);
+			//pTeleportMsg.MoveNumber = 52;
+			//CGTeleportRecv(&pTeleportMsg, lpMyNode->lpTargetGuildNode->Index[n]);
+			count++;
+		}
+		// ....................................
+   }
+
+  ▩  상점에서 팔때 로그에서 상점 번호 추가
+  void CGSellRequestRecv(LPPMSG_SELLREQUEST lpMsg, int aIndex)
+  {		
+	// ....................................
+	  LogAddTD(lMsg.Get(485),
+				lpObj->AccountID, 
+				lpObj->Name,
+				lpObj->Money, 
+				tShop,	--> 추가
+				lpObj->pInventory[lpMsg->Pos].GetName(),
+				lpObj->pInventory[lpMsg->Pos].m_Level,
+				lpObj->pInventory[lpMsg->Pos].m_Option1,
+				lpObj->pInventory[lpMsg->Pos].m_Option2,
+				lpObj->pInventory[lpMsg->Pos].m_Option3,
+				lpObj->pInventory[lpMsg->Pos].m_Number,
+				NewOption[0],
+				NewOption[1],
+				NewOption[2],
+				NewOption[3],
+				NewOption[4],
+				NewOption[5],
+				NewOption[6]
+				);
+	// ....................................
+  }
+
+- 2003.03.31 (foguy)	
+  ▩ 공격속도 핵 체크 루틴 추가
+  (GameMain.cpp) 	
+	DWORD		gAttackSpeedTimeLimit = 800;		// 공격속도 체크 제한 시간(공격속도 0일때 기준시간)	
+	int			bIsIgnorePacketSpeedHackDetect = FALSE;	// 스피드 핵 체크에 거린 패킷은 무시 한다
+	DWORD		gHackCheckCount = 5;				// 체크에 걸린 카운트(이 변수에 걸렸을대 Log를 적용한다)
+	float		gDecTimePerAttackSpeed = 5.33f;		// 공격속도가 증가할때 체크제한 시간 감소 비율
+	int			gMinimumAttackSpeedTime = 300;		// 최소 공격 시간(체크제한 시간은 이 이하가 될수 없다)
+
+	void ReadCommonServerInfo()
+	{
+		//.....................................
+		// 공속 체크를 위한 설정 값들
+		gAttackSpeedTimeLimit = GetPrivateProfileInt("GameServerInfo", "AttackSpeedTimeLimit", 800, gDirPath.GetNewPath("commonserver.cfg"));
+		bIsIgnorePacketSpeedHackDetect = GetPrivateProfileInt("GameServerInfo", "IsIgnorePacketHackDetect", 0, gDirPath.GetNewPath("commonserver.cfg"));		
+		gHackCheckCount = GetPrivateProfileInt("GameServerInfo", "HackCheckCount", 5, gDirPath.GetNewPath("commonserver.cfg"));	
+		gMinimumAttackSpeedTime = GetPrivateProfileInt("GameServerInfo", "MinimumAttackSpeedTime", 300, gDirPath.GetNewPath("commonserver.cfg"));	
+
+		GetPrivateProfileString("GameServerInfo", "DecTimePerAttackSpeed", "5.33", szTemp, 5, gDirPath.GetNewPath("commonserver.cfg"));	
+		gDecTimePerAttackSpeed = atof(szTemp);
+		//.....................................
+	}
+
+	(user.cpp)
+	typedef struct OBJECTSTRUCT
+	{
+		// ......................................
+		int		m_DetectSpeedHackTime;	// 스피드핵 체크시간
+		// ......................................
+	} OBJECTSTRUCT, *LPOBJECTSTRUCT;
+
+	(user.cpp)
+	// 캐릭터의 능력치를 계산한다.
+	void gObjCalCharacter(int aIndex)
+	{
+		// ......................................
+		// 공격 속도 체크 시간 설정
+		if( lpObj->Class == CLASS_WIZARD )
+		{	// 법사는 공격 속도*2로 적용된다
+			lpObj->m_DetectSpeedHackTime = gAttackSpeedTimeLimit-((lpObj->m_MagicSpeed*2)*gDecTimePerAttackSpeed);
+		}
+		else
+		{
+			lpObj->m_DetectSpeedHackTime = gAttackSpeedTimeLimit-((lpObj->m_AttackSpeed)*gDecTimePerAttackSpeed);
+		}
+
+		if( lpObj->m_DetectSpeedHackTime < gMinimumAttackSpeedTime )
+		{	// 공격속도 제한 시간은 한계값을 넘어 갈수 없다
+			lpObj->m_DetectSpeedHackTime = gMinimumAttackSpeedTime;
+		}		
+		// ......................................
+	} OBJECTSTRUCT, *LPOBJECTSTRUCT;
+
+	(protocol.cpp)
+	// 클라이언트에서 들어 오는 공격 명령에 대한 시간 체크 코드 추가
+	int iTimeCalc = GetTickCount()-lpObj->m_LastAttackTime;
+	if( iTimeCalc < lpObj->m_DetectSpeedHackTime ) 
+	{
+		lpObj->m_DetectCount++;
+		lpObj->m_SumLastAttackTime += iTimeCalc;
+
+		if( lpObj->m_DetectCount > gHackCheckCount )
+		{
+			LogAddTD("[%s][%s] %s Attack Speed Is Wrong Magic1 (%d)", 
+					 lpObj->AccountID, 
+					 lpObj->Name,
+					 lMsg.Get(1900+lpObj->Class),
+					 lpObj->m_SumLastAttackTime/lpObj->m_DetectCount);
+
+			lpObj->m_SumLastAttackTime = 0;
+			lpObj->m_DetectCount = 0;				
+		}
+
+		lpObj->m_LastAttackTime = GetTickCount();
+		return;
+	}
+	else
+	{
+		lpObj->m_SumLastAttackTime = 0;
+		lpObj->m_DetectCount = 0;
+	}	
+	lpObj->m_LastAttackTime = GetTickCount();
+
+
+
+	// 다중 공격에 대한 체크 방식 변경 (일반 공격과 같이 처리)
+	void CGBeattackRecv(LPBYTE lpRecv, int aIndex, int magic_send)
+	{
+		// .......................................................
+		int NSAttackSerial = lpCount->Serial;
+			
+		if( gObj[aIndex].OSAttackSerial >= 255 && ((gObj[aIndex].OSAttackSerial-lpCount->Serial)>50))
+		{
+			gObj[aIndex].OSAttackSerial = -1;
+		}
+
+		if(NSAttackSerial > gObj[aIndex].OSAttackSerial )
+		{
+			gObj[aIndex].OSAttackSerial = NSAttackSerial;
+
+			LPOBJECTSTRUCT lpObj= &gObj[aIndex];
+
+			int iTimeCalc = GetTickCount()-lpObj->m_LastAttackTime;
+			if( iTimeCalc < lpObj->m_DetectSpeedHackTime ) 
+			{
+				lpObj->m_DetectCount++;
+				lpObj->m_SumLastAttackTime += iTimeCalc;
+
+				if( lpObj->m_DetectCount > gHackCheckCount )
+				{
+					LogAddTD("[%s][%s] %s Attack Speed Is Wrong Magic3 (%d)", 
+							 lpObj->AccountID, 
+							 lpObj->Name, 
+							 lMsg.Get(1900+lpObj->Class),
+							 lpObj->m_SumLastAttackTime/lpObj->m_DetectCount);
+
+					lpObj->m_SumLastAttackTime = 0;
+					lpObj->m_DetectCount = 0;
+				}
+				lpObj->m_LastAttackTime = GetTickCount();
+				return;
+			}
+			else
+			{
+				lpObj->m_SumLastAttackTime = 0;
+				lpObj->m_DetectCount = 0;
+			}
+			lpObj->m_LastAttackTime = GetTickCount();
+
+			LogAdd("Multi Magic3 Attack Speed = [%d,%d] %d", gObj[aIndex].OSAttackSerial, lpObj->m_MagicSpeed, iTimeCalc);				
+		}
+		// .......................................................
+	}
+
+
+- 2003.03.26 (foguy)	
+  ▩ 몬스터 아이템 드롭 방식 변경 (아이템 드롭자리 생기는것 수정)
+   - 기존의 생성되는 몬스터별로 아이템들을 따로 가지고 있는 것을 몬스터의 레벨 별로 분류해서
+     각각의 몬스터 레벨별로 1000개의 아이템 리스트들을 만든 후, 그것을 가지고 아이템을 드롭하게 변경
+	(MonsterItemMng.cpp, MonsterItemMng.h 추가)
+	(gObjMonster.cpp)
+	void gObjMonsterDieGiveItem(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj)
+	{
+		// ..................................
+		if( (rand()%itemrate) < gItemDropPer )
+		{
+			DropItem = g_MonsterItemMng.GetItem(lpObj->Level);
+			if( DropItem == NULL )
+			{
+				item_drop = 0;
+			}
+			else
+			{
+				item_drop = 1;
+			}
+		}
+		// ..................................
+	}
+
+- 2003.03.21 (foguy)	
+  ▩ 날개 공격력+% 옵션이 법사에게는 적용 되지 않는 부분 수정
+  (user.cpp)  
+  BOOL gObjAttack(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, CMagicInf *lpMagic, int magicsend, BYTE MSBFlag, int AttackDamage)
+  {
+   //.............................................
+	if( gObjWingSprite(lpObj) == TRUE )
+		{
+			CItem	*Wing = &lpObj->pInventory[EQUIPMENT_WING];
+			if( lpObj->Class != CLASS_WIZARD || !skill )	// <-- 수정
+			{
+				lpObj->Life -= 3;
+				if( lpObj->Life < 0 ) 
+				{
+					lpObj->Life = 0;
+				}
+				else
+				{
+					// 12% + level
+					AttackDamage = AttackDamage*(112+(Wing->m_Level*2))/100;
+					//LogAdd("[%s][%d] 날개 착용 효과1 %d", lpObj->AccountID, lpObj->Name, AttackDamage);
+				}
+				GCReFillSend(lpObj->m_Index, (WORD)lpObj->Life, 0xFF, 0);
+			}												// <-- 수정
+		}
+   //.............................................
+	}
+
+- 2003.03.20 (foguy)	
+  ▩ 물약 및 화살 겹치기시 레벨 체크추가
+  (user.cpp)
+  BYTE gObjInventoryMoveItem(int aIndex, BYTE source, BYTE target, int & durSsend, int & durTsend, BYTE sFlag, BYTE tFlag, LPBYTE siteminfo )
+
+  - if( sFlag != 0 )	// 물약 겹치기는 인벤토리에서만.. 
+		return 0xFF;
+
+	// 대상이 같다면..
+	if( titem->m_Type == sitem->m_Type && 
+		titem->m_Level == sitem->m_Level )
+
+  ▩ 창고사용료 변경
+  - 기존에는 창고를 사용했을때 사용료를 받았지만, 이번에는 창고에서 물건을 꺼낼때마다 사용료를 받게 된다
+  void CGInventoryItemMove(LPPMSG_INVENTORYITEMMOVE lpMsg, int aIndex)
+  -	if( (result!=0xFF)&& (lpMsg->sFlag == 2 && lpMsg->tFlag == 0) )	
+	{	// 창고에서 인벤으로 이동할때는 사용료지불
+		int  rZen = GetWarehouseUsedHowMuch(lpObj->Level);
+		if( lpObj->Money-rZen > 0 )
+		{
+			int oldmoney=lpObj->Money;
+			lpObj->Money -= rZen;
+			GCMoneySend(lpObj->m_Index, lpObj->Money);
+			LogAdd("창고 사용료 지불 : %d - %d = %d", oldmoney, rZen, lpObj->Money);
+		}
+		else if( lpObj->WarehouseMoney-rZen > 0 )
+		{
+			int oldmoney=lpObj->WarehouseMoney;
+			lpObj->WarehouseMoney -= rZen;
+			LogAdd("창고 사용료 지불(창고) : %d - %d = %d", oldmoney, rZen, lpObj->WarehouseMoney);
+			GCWarehouseInventoryMoneySend(aIndex, 0x01, lpObj->Money, lpObj->WarehouseMoney);
+		}
+	}
+
+
+  - 창고 사용료는 100단위까지는 10단위 절삭, 1000단위 이상부터는 100단위 절삭
+  (gamemain.cpp)
+  int GetWarehouseUsedHowMuch(int UserLevel)
+	{
+		int  rZen=0;
+
+		rZen = UserLevel*UserLevel*0.1*0.4;
+		if( rZen < 1 ) rZen = 1;
+
+		if( rZen == 0 )
+			rZen = 1;
+
+		if( rZen >= 1000 )
+		{
+			rZen = rZen/100*100;
+		}
+		else
+		{
+			rZen = rZen/10*10;
+		}
+
+		return rZen;
+	}
+
+  ▩ 카오스 조합 변경 
+  - (악마의 광장 이벤트 제거)
+  - 초대권 조합이 레벨별로 분리
+  (protocol.cpp)
+  void CGChaosBoxItemMixButtonClick(int aIndex)
+  (ChaosBox.cpp)
+  BOOL	CheckDevilSquareItem(LPOBJECTSTRUCT lpObj, int& eventitemcount, int& itemlevel);
+  BOOL	DevilSquareEventChaosMix(LPOBJECTSTRUCT lpObj, BOOL bCheckType, int iItemLevel);
+
+  ▩ 악마의 눈, 열쇠는 이제 레벨 1 - 4까지 떨어진다
+  (user.cpp)
+  void gObjGiveItemSearch(LPOBJECTSTRUCT lpObj, int maxlevel)
+  {
+  // ............................
+    if( bCheckDevil == TRUE )
+	{	// 악마의 광장 아이템의 드랍은 다르게 설정한다
+		int devilitemlevel = 0;
+
+		if( rand()%5 != 0 )
+		{	// 0짜리 아이템
+			if( lpObj->Level <= 15)
+			{
+				devilitemlevel = 0;
+			}
+			else if( lpObj->Level <= 40)
+			{
+				devilitemlevel = 1;
+			}
+			else if( lpObj->Level <= 54)
+			{
+				devilitemlevel = 2;
+			}
+			else if( lpObj->Level <= 66)
+			{
+				devilitemlevel = 3;
+			}
+			else
+			{
+				devilitemlevel = 4;
+			}
+
+			if( devilitemlevel != 0 )
+			{	// 앞으로는 0짜리 악마의 광장 아이템은 떨어 지지 않는다
+				if( gObjMonsterInventoryInsertItem(lpObj, type, index, devilitemlevel) != 0xFF )
+				{
+					///*if( lpObj->Level >= 50 )
+					//{
+					LogAdd("(%d)Devil Square Item 추가(level:%d) : type:%d index:%d level:%d %s", lpObj->Class, lpObj->Level, type, index, devilitemlevel, lpObj->Name);
+					//}
+					//*/
+					incount++;
+					if( incount > MAX_INVENTORY-1 ) break;
+				}
+			}
+		}
+	}	
+	// ............................
+  }
+
+  ▩ 악마의 광장 변경 
+  - 오픈 시간은 이제 부터 2시간 단위로...
+  (DevilSquare.cpp)
+  void CDevilSquare::CheckSync()
+
+  - 광장에서 사냥시 추가 경험치 없음
+  (DevilSquare.cpp)
+  int CDevilSquare::gObjMonsterExpSingle(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, int dmg, int tot_dmg)
+  void CDevilSquare::gObjExpParty(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, int AttackDamage, int MSBFlag)
+
+  - 악마의 광장 이벤트 관련 해서 상점에서는 더이상 말하지 않는다
+  (NpcTalk.cpp)
+
+
+
+
+
+- 2003.03.15 (foguy)	
+  ▩ 화살 레벨 + 공격력에 적용 
+
+   - 기존
+   (user.cpp)
+   int  gObjGetAttackDamage(LPOBJECTSTRUCT lpObj, int targetDefense, BYTE & effect)
+   {
+	   //활일때
+		if( Left->m_Type >= ITEM_BOW && Left->m_Type < ITEM_BOW+7)
+		{
+			ad = (lpObj->m_AttackDamageLeft)-targetDefense;			
+						
+			// 20030228 화살 레벨 추가		
+			// 화살을 검사해서 +1 레벨이면 공격력+ 2% + 1 을 적용시킨다.
+			/* 삭제
+			if( (Right->m_Type == MAKE_ITEMNUM(4,15)) && Right->m_Level == 1 )
+			{
+				ad += (ad*3/100)+1;			
+			}		
+			else if( (Right->m_Type == MAKE_ITEMNUM(4,15)) && Right->m_Level == 2 )
+			{
+				ad += (ad*5/100)+1;			
+			}
+			*/
+		}
+		//석궁일때
+		else if(( Right->m_Type >= ITEM_BOW+8 && Right->m_Type < ITEM_BOW+15) ||
+			  ( Right->m_Type >= ITEM_BOW+16 && Right->m_Type < ITEM_BOW+MAX_ITEM_INDEX))
+		{
+			ad = (lpObj->m_AttackDamageRight)-targetDefense;
+			// 20030228 석궁 레벨 추가		
+			// 석궁화살을 검사해서 석궁활이 +1 레벨이면 공격력+ 2% + 1 을 적용시킨다.
+			/* 삭제
+			if( (Left->m_Type == MAKE_ITEMNUM(4,7)) && Left->m_Level == 1 )
+			{
+				ad += (ad*3/100)+1;			
+			}
+			else if( (Left->m_Type == MAKE_ITEMNUM(4,7)) && Left->m_Level == 2 )
+			{
+				ad += (ad*5/100)+1;			
+			}
+			*/
+		}
+   }
+
+   - 수정 
+    (user.cpp)
+  void gObjCalCharacter(int aIndex)
+  {
+    // ....................................
+    if( Left->m_Type >= ITEM_BOW && Left->m_Type < ITEM_BOW+7)
+	{
+		// 20030228 화살 레벨 추가		
+		// 화살을 검사해서 +1 레벨이면 공격력+ 2% + 1 을 적용시킨다.
+		if( (Right->m_Type == MAKE_ITEMNUM(4,15)) && Right->m_Level == 1 )
+		{	// 화살일 경우
+			lpObj->m_AttackDamageMinLeft	+= (WORD)(lpObj->m_AttackDamageMinLeft*(0.03f)+1);	
+			lpObj->m_AttackDamageMaxLeft	+= (WORD)(lpObj->m_AttackDamageMaxLeft*(0.03f)+1);	
+		}		
+		else if( (Right->m_Type == MAKE_ITEMNUM(4,15)) && Right->m_Level == 2 )
+		{
+			lpObj->m_AttackDamageMinLeft	+= (WORD)(lpObj->m_AttackDamageMinLeft*(0.05f)+1);	
+			lpObj->m_AttackDamageMaxLeft	+= (WORD)(lpObj->m_AttackDamageMaxLeft*(0.05f)+1);
+		}	
+	}
+	//석궁일때
+	else if(( Right->m_Type >= ITEM_BOW+8 && Right->m_Type < ITEM_BOW+15) ||
+	      ( Right->m_Type >= ITEM_BOW+16 && Right->m_Type < ITEM_BOW+MAX_ITEM_INDEX))
+	
+	{
+		if( (Left->m_Type == MAKE_ITEMNUM(4,7)) && Left->m_Level == 1 )
+		{
+			lpObj->m_AttackDamageMinRight	+= (WORD)(lpObj->m_AttackDamageMinRight*(0.03f)+1);	
+			lpObj->m_AttackDamageMaxRight	+= (WORD)(lpObj->m_AttackDamageMaxRight*(0.03f)+1);	
+			
+		}
+		else if( (Left->m_Type == MAKE_ITEMNUM(4,7)) && Left->m_Level == 2 )
+		{
+			lpObj->m_AttackDamageMinRight	+= (WORD)(lpObj->m_AttackDamageMinRight*(0.05f)+1);	
+			lpObj->m_AttackDamageMaxRight	+= (WORD)(lpObj->m_AttackDamageMaxRight*(0.05f)+1);	
+		}
+	}
+   }
+
+- 2003.03.14 (foguy)	
+  ▩ 아이템 화살 가격 변동
+  (zzzItem.cpp)
+  void CItem::Value()
+  if(m_Type==ITEM_BOW+15)
+	{	// 화살
+		int levelgold = 70;		
+		if( m_Level = 1 )
+		{
+			levelgold = 1200;
+		}
+		else if( m_Level = 2 )
+		{
+			levelgold = 2000;
+		}
+
+		if(m_Durability > 0)
+		{
+			Gold = (int)(levelgold * m_Durability / p->Durability);
+		}
+         //  	Gold = (int)(70 * m_Durability / p->Durability)+(80*(m_Level*2));
+	}
+	else if(m_Type==ITEM_BOW+7)
+	{
+		if(m_Durability > 0)
+		{
+			int levelgold = 100;		
+			if( m_Level = 1 )
+			{
+				levelgold = 1400;
+			}
+			else if( m_Level = 2 )
+			{
+				levelgold = 2200;
+			}
+			Gold = (int)(levelgold * m_Durability / p->Durability);
+		}
+           	//Gold = (int)(100 * m_Durability / p->Durability)+(170*(m_Level*2));
+	}
+
+- 2003.03.09 (foguy)
+  ▩ 내구도 추가작업
+
+  (ItemDef.h)
+    float RepaireMoneyRate;		// 기본 수리 비용 비율
+	float AllRepaireMoneyRate;	// 완전 수리 비용 비율
+	} ITEM_ATTRIBUTE;
+	
+  (zzzItem.h)
+  CItem Class 추가
+  :
+  float m_BaseDurability;			// 내구력1에 대한 수리비용(Value에서 계산해 둔다)
+  float  m_DurabilityState[4];		// 내구력 감소에 대한 아이템 능력치 패널티 퍼센트 값적용을 위한 테이블
+  float  m_CurrentDurabilityState;	// 내구력 감소에 대한 아이템 능력치 패널티 퍼센트 값
+
+	// 일반 공격 무기 내구도 감소
+	int NormalWeaponDurabilityDown(int defence);
+	// 활 내구도 감소
+	int BowWeaponDurabilityDown(int defence);
+	// 지팡이 내구도 감소
+	int StaffWeaponDurabilityDown(int defence);
+	// 내구도 상태 검사
+	int	CheckDurabilityState();		
+
+	// 아이템이 내구력을 가지고 있는가?
+	extern BOOL HasItemDurability(int index);
+
+	// 아이템 수리 비용 적용 퍼센트값 얻는다
+	extern inline float	GetRepairItemRate(int index);
+	// 아이템 완전 수리 비용 적용 퍼센트값 없는다
+	extern inline float	GetAllRepairItemRate(int index);
+
+
+  (zzzItem.cpp)
+	
+	void CItem::Convert( int type, BYTE Option1, BYTE Option2, BYTE Option3, BYTE Attribute2, BYTE DbVersion )
+	{
+		// .........................................
+		// 아이템 기본 내구도 및 
+		if( ItemGetDurability(m_Type) )
+		{
+			m_BaseDurability = (float)ItemGetDurability(m_Type, m_Level, Attribute2&0x7F);
+		}
+		else
+		{
+			m_BaseDurability = 0.f;
+		}
+		m_DurabilityState[0] = m_BaseDurability*0.5f;
+		m_DurabilityState[1] = m_BaseDurability*0.3f;
+		m_DurabilityState[2] = m_BaseDurability*0.2f;
+
+		// .........................................
+		// 내구도 상태설정
+		CheckDurabilityState();
+
+		// .........................................
+		Value();
+
+		// 내구도 적용
+		if( m_Type >= ITEM_STAFF && m_Type < ITEM_STAFF+MAX_ITEM_INDEX )
+		{	// 지팡이는 공격력 계산 없다
+			m_DamageMin = 0;
+			m_DamageMax = 0;
+		}	
+		else if( m_Type != ITEM_BOW+7 && m_Type != ITEM_BOW+15 )
+		{	// 지팡이 또는 화살, 석궁용화살이 아니면
+			m_DamageMin -= (WORD)(m_DamageMin*m_CurrentDurabilityState);
+			m_DamageMax -= (WORD)(m_DamageMax*m_CurrentDurabilityState);
+			m_Defense -= (WORD)(m_Defense*m_CurrentDurabilityState);
+
+			m_SuccessfulBlocking -= (BYTE)(m_SuccessfulBlocking*m_CurrentDurabilityState);
+		}
+
+		if( m_Durability == 0.f )
+		{	// 내구도가 0이면 저항력도 없다
+			memset(m_Resistance, 0, MAX_RESISTANCE);
+		}
+	}
+
+	void CItem::PlusSpecial(int* Value,int Special)
+	{
+		if(m_Type < 0 ) return;
+
+		if( m_Durability == 0.f )
+		{	// 내구력이 0이면  추가 옵션 적용하지 않는다
+			return;
+		}
+
+		for(int i=0;i<m_SpecialNum;i++)
+		{
+			if( m_Special[i] == Special )
+			{
+				switch( Special )
+				{
+				case AT_IMPROVE_BLOCKING :
+					*Value += m_Option3*5;
+					break;
+				case AT_LUCK :
+					*Value += 4;
+					break;
+				case AT_IMPROVE_MAGIC :
+				case AT_IMPROVE_DEFENSE :
+					{	
+						int iValue = m_Option3*4;
+						// 옵션에서도 내구도 적용
+						(*Value) += iValue - (int)(iValue*m_CurrentDurabilityState);
+					}
+					break;
+				default :	// AT_IMPROVE_DAMAGE
+							// AT_IMPROVE_MAGIC 
+							// AT_IMPROVE_DEFENSE
+					*Value += m_Option3*4;
+					//(*Value)
+					break;
+				}
+			}
+		}
+	}
+
+   (user.cpp)
+   int gObjGetAttackDamageWizard(LPOBJECTSTRUCT lpObj, int targetDefense, CMagicInf *lpMagic, BYTE & effect)
+   {
+		// .........................................
+		// 지팡이는 마력증가 계산량에서 내구력 감소에 대한 패널티가 적용된다
+		damage =  (int)(damage*Right->m_CurrentDurabilityState);
+		// .........................................
+   }
+   
+   // 초당 감소되는 내구력감소
+	void gObjSecondDurDown(LPOBJECTSTRUCT lpObj)
+
+- 2003.03.08 (foguy)
+  ▩ 프로토콜 수정
+  - 거래 요청시 대상의 레벨이 필요 하다
+	// CS [0x37] 물건 교환에 응할 것 인지 알린다. (교환하고자 했던 유저에게)
+	typedef struct
+	{
+		PBMSG_HEAD	h;
+		BYTE		Response;
+		BYTE		Id[MAX_IDSTRING];
+		WORD		Level;		// 레벨 추가
+	} PMSG_TRADE_RESPONSE, *LPPMSG_TRADE_RESPONSE;
+	- BOOL GCTradeResponseSend(BYTE response, int aIndex, char* id, WORD level)
+
+
+- 2003.03.05 (foguy)
+  ▩ Item(kor).txt 변경 
+	 Type 0 - 5 AttrDur, DefDur 이 없어지고 MagicDur이 새로 생겼다	
+	 Type 12 , ReqStrength가 새로 생겼다 : "분노의일격구슬로"
+  ▩ 몬스터 정보를 설정할때 pInventoryCount가 초기화 안되어 있었다.
+     처음 시작할때는 상관없지만, 몬스터 정보를 리로드할때 문제가 초기화가 안되어 
+	 있어서.. 문제가 발생한다
+
+	 (user.cpp)
+	 BOOL gObjSetMonster(int aIndex, int MonsterClass)
+		- (*lpObj->pInventoryCount)	= 0;  
+
+  ▩ 요정 화살, 석궁화살+2 추가 (공격력 5%증가)
+	(user.cpp) 
+	int  gObjGetAttackDamage(LPOBJECTSTRUCT lpObj, int targetDefense, BYTE & effect)	 
+
+	
+
+- 2003.03.03 (foguy)	
+  ▩ 계정 아이템 블럭시 CtlCode 추가
+  (DSProtocol.cpp) 
+  void JGPGetCharList(BYTE *lpRecv);
+	if( gObj[aIndex].m_cAccountItemBlock )
+	{	// 계정 캐릭터 블럭 표시
+		pCList.CtlCode |= 0x10;
+	}
+  ▩ 계정아이템 블럭일때는 캐릭터도 삭제 할수 없다
+  (프로토콜 Result값 추가)
+  [0xF3][0x02] 유저로부터 캐릭터 삭제 요청이 들어오면
+  Result = 0x03;
+  (protocol.cpp)
+  void CGPCharDel(LPPMSG_CHARDELETE lpMsg, int aIndex)
+	if( gObj[aIndex].m_cAccountItemBlock )
+	{	// 아이템블럭일때는 캐릭터를 삭제 할수 없다
+		pResult.result	   = 0x03;
+		DataSend(aIndex, (LPBYTE)&pResult, pResult.h.size);
+	}
+
+  ▩ MAX_OBJECT의 수를 3300에서 3500으로 늘임
+  #define MAX_OBJECT					3500	// 게임서버의 최대 오브젝트(유저) 수
+
+  ▩ 엑설런트 아이템 적용에서 공격력 증가, 마력 증가 구분적용
+  (user.cpp)
+  void GObjExtItemApply(LPOBJECTSTRUCT lpObj)
+	if( lpObj->pInventory[n].IsExtAttackRate() ) 
+	{
+		if((lpObj->pInventory[n].m_Type >=ITEM_STAFF && lpObj->pInventory[n].m_Type <ITEM_STAFF+MAX_ITEM_INDEX) ||//지팡이
+		   (lpObj->pInventory[n].m_Type ==ITEM_HELPER+12))//목걸이
+		{	// 마력 증가 + 레벨/20					
+			lpObj->m_MagicDamageMax			+= lpObj->Level/20;
+			lpObj->m_MagicDamageMin			+= lpObj->Level/20;
+		}
+		else
+		{	// 공격력 증가 + 레벨/20
+			lpObj->m_AttackDamageMinLeft	+= lpObj->Level/20;
+			lpObj->m_AttackDamageMaxLeft	+= lpObj->Level/20;
+			lpObj->m_AttackDamageMinRight	+= lpObj->Level/20;
+			lpObj->m_AttackDamageMaxRight	+= lpObj->Level/20;
+		}
+	}
+
+	// 공격력 증가, 마력 증가 + 2%
+	if( lpObj->pInventory[n].IsExtAttackRate2() )
+	{
+		if((lpObj->pInventory[n].m_Type >=ITEM_STAFF && lpObj->pInventory[n].m_Type <ITEM_STAFF+MAX_ITEM_INDEX) ||//지팡이
+		   (lpObj->pInventory[n].m_Type ==ITEM_HELPER+12))//목걸이
+		{	// 마력 증가 + 2%
+			lpObj->m_MagicDamageMax		 += lpObj->m_MagicDamageMax*lpObj->pInventory[n].IsExtAttackRate2()/100;
+			lpObj->m_MagicDamageMin		 += lpObj->m_MagicDamageMin*lpObj->pInventory[n].IsExtAttackRate2()/100;
+		}
+		else
+		{	// 공격력 증가, 마력 증가 + 2%
+
+			lpObj->m_AttackDamageMinLeft += lpObj->m_AttackDamageMinLeft*lpObj->pInventory[n].IsExtAttackRate2()/100;
+			lpObj->m_AttackDamageMaxLeft += lpObj->m_AttackDamageMaxLeft*lpObj->pInventory[n].IsExtAttackRate2()/100;
+			lpObj->m_AttackDamageMinRight+= lpObj->m_AttackDamageMinRight*lpObj->pInventory[n].IsExtAttackRate2()/100;
+			lpObj->m_AttackDamageMaxRight+= lpObj->m_AttackDamageMaxRight*lpObj->pInventory[n].IsExtAttackRate2()/100;
+		}
+	}
+
+- 2003.02.27 (SaemSong)	
+  ▩ 아이템 내구력 작업
+     수정 부분
+	 (DSProtocol.cpp) Dur 수정
+	 void ItemSerialCreateSend()
+	 
+	 (User.cpp)
+	 // 공격을 받아 방어구중 하나를 내구력 다운 시킨다.
+     void gObjArmorRandomDurDown(LPOBJECTSTRUCT lpObj)
+	 // 공격 무기의 내구력 감소 부분 다음 함수에 추가
+     int  gObjGetAttackDamage(LPOBJECTSTRUCT lpObj, int targetDefense, BYTE & effect)
+	     주석 : "20030228 아이템 내구력 다운" 
+     
+	 (zzzItem.cpp)
+	 // 무기 아이템 내구력을 하양 조정한다.
+	 int CItem::WeaponDurabilityDown(float dur)
+	 // 방어구 아이템 내구력을 하양 조정한다.
+	 int CItem::ArmorDurabilityDown(float dur)
+	 // 내구력을 얻는다.
+	 int ItemGetDurability(int index, int itemLevel, int ExcellentItem);
+	 // 공격시 떨어지는 내구력 값을 얻는다.
+	 int ItemGetAttackDurability(int index)
+	 // 방어시 떨어지는 내구력 값을 얻는다.
+	 int ItemGetDefenseDurability(int index)
+
+	 // (ItemDef.h)
+	 ITEM_ATTRIBUTE 멤버 추가
+		BYTE AttackDur;		// 공격시 다운되는 내구력
+		BYTE DefenceDur;	// 방어시 다운되는 내구력
+	 
+	 // (Item.txt)
+	    공격시와 방어시 다운되는 내구력 값이 추가되었습니다.
+        
+
+  ▩ 아이템 수리 기능
+     (GameMain.cpp)
+	 int GetWarehouseUsedHowMuch(int UserLevel)
+
+	 (GMMng.cpp)
+	 - 아이템 /만들기 명령어에 내구력 중간 명령어로 추가  
+	   /만들기 Type Index Level Dur
+
+
+  ▩ 창고 사용료 
+      (NpxTalk.cpp)
+      BOOL NpcWarehouse(LPOBJECTSTRUCT lpNpc, LPOBJECTSTRUCT lpObj)
+	  (Protocol.cpp) 
+
+      ///////////////////////////////////////////////////////////////////
+	  위 함수에서 다음 부분은 창고를 한번이라도 사용했다는 체크를 한다.
+      이 변수를 사용하여 사용료를 지불하게 된다.
+	  void CGInventoryItemMove(LPPMSG_INVENTORYITEMMOVE lpMsg, int aIndex)
+	    if( (result!=0xFF)&& lpMsg->sFlag == 2 || lpMsg->tFlag == 2)
+		{
+			// 창고를 사용했다
+			lpObj->WarehouseCount = 1;
+		}
+
+      ///////////////////////////////////////////////////////////////////////
+	  창고 사용을 마쳤을때 사용료 지불
+	  void CGWarehouseUseEnd(int aIndex)
+
+      
+  ▩ 요정 화살 레벨 추가
+      (User.cpp)
+	  // 주석 : "20030228 화살 레벨 추가" 참고
+	  // 주석 : "20030228 석궁 레벨 추가" 참고
+  
+
+- 2003.02.27 (foguy)	
+  ▩ 암호화 된 패킷에 추가될 시리얼이 서버쪽에서도 추가되었다
+  (giocp.cpp)
+  int DataSend(int aIndex, LPBYTE lpMsg, DWORD dwSize);
+
+  - 기존
+	if( lpMsg[0] == 0xC3 )
+		{
+			iSize			= g_SimpleModulusSC.Encrypt( ExSendBuf+2, lpMsg+2, dwSize-2);
+			ExSendBuf[0]	= 0xC3;
+			ExSendBuf[1]	= iSize+2;
+			SendBuf			= ExSendBuf;
+			dwSize			= iSize+2;
+		}
+		else
+		{
+			iSize			= g_SimpleModulusSC.Encrypt( ExSendBuf+3, lpMsg+3, dwSize-3);
+			ExSendBuf[0]	= 0xC4;
+			ExSendBuf[1]	= HIBYTE(iSize+3);
+			ExSendBuf[2]	= LOBYTE(iSize+3);
+			SendBuf			= ExSendBuf;
+			dwSize			= iSize+3;
+		}
+
+   - 수정
+   BYTE btemp;
+
+		if( lpMsg[0] == 0xC3 )
+		{
+			btemp = lpMsg[1];
+			lpMsg[1] = gNSerialCheck[aIndex].GetSendSerial();
+
+			iSize			= g_SimpleModulusSC.Encrypt( ExSendBuf+2, lpMsg+1, dwSize-1);
+			ExSendBuf[0]	= 0xC3;
+			ExSendBuf[1]	= iSize+2;
+			SendBuf			= ExSendBuf;
+			dwSize			= iSize+2;
+
+			lpMsg[1]  = btemp;
+		}
+		else
+		{
+			btemp = lpMsg[2];
+			lpMsg[2] = gNSerialCheck[aIndex].GetSendSerial();
+
+			iSize			= g_SimpleModulusSC.Encrypt( ExSendBuf+3, lpMsg+2, dwSize-2);
+			ExSendBuf[0]	= 0xC4;
+			ExSendBuf[1]	= HIBYTE(iSize+3);
+			ExSendBuf[2]	= LOBYTE(iSize+3);
+			SendBuf			= ExSendBuf;
+			dwSize			= iSize+3;
+			lpMsg[2] = btemp;
+		}
+
+  ▩ 국내 버전에도 SPE 및 시리얼 적용 추가
+	(giocp.cpp) 중국쪽에 적용된것을 사용한다
+	BOOL RecvDataParse(LPPER_IO_CONTEXT	lpIOContext, int uIndex)
+
+  ▩ 0x19, 0x1E 암호화 패킷으로 변경
+
+  ▩ 아이템 블럭은 시리얼을 가지는 아이템은 사용 못하게 변경
+  (protocol.cpp)
+  // 0x26 
+  void CGUseItemRecv(LPPMSG_USEITEM lpMsg, int aIndex);
+	if( citem->m_serial )
+	{	
+		if( !gObjCanItemTouch(&gObj[aIndex], 1) )
+		{	// 아이템 블럭은 시리얼을 가지는 아이템을 사용하지 못한다
+			GCReFillSend(aIndex, (WORD)gObj[aIndex].Life, 0xFD, 1);			
+			return;
+		}
+	}
+
+
+- 2003.02.24 (foguy)	
+  ▩ (user.cpp) 엑설런트 옵션은 제한은 8개인데, 엑설런트 옵션이 붙지 않은 아이템까지
+                count 되었다
+  void GObjExtItemApply(LPOBJECTSTRUCT lpObj)
+  - 기존 
+  for( i=0; i<maxn2_loop; i++)
+	{	
+		n = temp_n2[i];
+		if( max_count < 8 )
+		{
+			if( lpObj->pInventory[n].IsItem() == TRUE )
+			{
+  - 수정
+  for( i=0; i<maxn2_loop; i++)
+	{	
+		n = temp_n2[i];
+		if( max_count < 8 )
+		{
+			if( lpObj->pInventory[n].IsItem() == TRUE && lpObj->pInventory[n].IsExtItem() )
+			{
+
+  ▩ 아이템 블럭이 걸려 있는 사용자의 경우 아이템을 떨어뜨리게 하지 않는다
+  (user.cpp) void gObjUserDie(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj)
+  - if( gObjCanItemTouch(lpObj, 0) == FALSE )	// 아이템을 이동할 수 없다면
+	{
+		itemdrop = 1;
+	}
+
+  ▩ 몬스터 최초 공격시 HitDamage 체크가 빠져 있다. 
+     사용자가 공향을 받고 몬스터 체력보다 높은 공격력이 나왔을때, HitDamage가 전체적용되어 버린다
+	 (gObjMonster.cpp) 
+	 void gObjMonsterSetHitDamage(LPOBJECTSTRUCT lpObj, int hit_player, int hit_damage )
+	- 추가
+	 if( lpObj->sHD[blank].HitDamage > lpObj->MaxLife )
+			lpObj->sHD[blank].HitDamage = (short)lpObj->MaxLife;
+
+  ▩ 스킬 공격성공시 뒤로 밀린때, 이동 경로가 남아 있으면, 서버쪽에서는 밀렸을때의 좌표를 
+     가지지 않고, 이동 경로로 계속 진행한다
+	 (user.cpp)
+	 - BOOL gObjBackSpring(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj)	
+	   lpObj->PathCount = 0;		// 오브젝트의 패스카운트를 없앤다
+
+  ▩ 카오스 조합 요구 프로토콜에서 결과값 추가
+  (protocol.cpp)
+	이것은 클라이언트에서 조합중에 아이템을 움직이지 않게 하기 위해서이다
+	- 0x86, 
+	Result 
+	3 : 악마의 열쇠, 눈의 수가 많다
+	4 : 악마의 광장 초대권 조합은 레벨 10이상만 할수 있다
+	5 : 경품이 당첨되었다
+	6 : 조합조건에 맞지 않는데, 열쇠또는 눈이 하나라도 포함되어 있다		
+
+
+- 2003.02.25 (foguy)	
+  ▩ 악마의 광장에서 보너스 경험치를 받았을때, 레벨업 체크를 안했었다
+	(devilsquareground.cpp) 
+	void CDevilSquareGround::SendScore()
+	- (*Itor)->Experience += m_DevilSquareScoreInfoTOP10.Score[0].BonusExp;
+		gObjLevelUp((*Itor), m_DevilSquareScoreInfoTOP10.Score[0].BonusExp);
+
+- 2003.02.19 (foguy)	
+  ▩ 아틀란스에서 유니리아를 장착 못하게 하는 코드가 유니라아 타입 대신에 번개 목걸이로 되어 있었다
+  - 기존 
+	else if( lpItem->m_Type == MAKE_ITEMNUM(13,12) && lpObj->MapNumber == 7 )	// 유니리아의 경우 아틀란스에서 착용 못하게 한다
+  - 수정 
+    else if( lpItem->m_Type == MAKE_ITEMNUM(13,2) && lpObj->MapNumber == 7 )	// 유니리아의 경우 아틀란스에서 착용 못하게 한다
+  ▩ 암호화 : spe 및 패킷 시리얼 추가
+  ***********************************************************************************************
+  ** 주의 먼저 테스트 서버에서만 적용될것이므로, 혹시 중간에 본섭에 패치 될때에는, 기존에걸로
+  사용해야됨
+  ***********************************************************************************************
+  (giocp.cpp) : 기존에 중국에서 사용하는 부분 그대로 적용
+  BOOL RecvDataParse(LPPER_IO_CONTEXT	lpIOContext, int uIndex);
+  ***********************************************************************************************
+
+
+- 2003.02.17 (foguy)	
+  ▩ void gObjCalCharacter(int aIndex)
+	- 세인트 석궁 데미지가 일반 무기의 데미지로 설정되어 있었다
+	- 기존
+	if((Right->m_Type>=ITEM_BOW+8 && Right->m_Type<ITEM_BOW+15) || (Left->m_Type>=ITEM_BOW && Left->m_Type<ITEM_BOW+7))
+	- 수정
+	if((Right->m_Type>=ITEM_BOW+8 && Right->m_Type<ITEM_BOW+16) || (Left->m_Type>=ITEM_BOW && Left->m_Type<ITEM_BOW+7))
+
+- 2003.02.17 (foguy)	
+  ▩ 파티 버그 수정 (레벨 차이가 120이상이 아닌데도 파티가 안맺어 지는 버그)
+  : 파티를 생성할때 m_MinLevel이 초기화가 안되어 있었다
+  (PartyClass.cpp)
+  int PartyClass::Create(int usernumber, int dbnumber, int level)
+	- m_PartyS[n].m_MinLevel = 0;	  
+
+
+- 2003.02.14 (foguy)	
+  ▩ 악마의 광장에서는 거래할수 없게 수정
+  (protocol.cpp) void CGTradeRequestSend(LPPMSG_TRADE_REQUEST lpMsg, int aIndex)
+	if( gObj[number].MapNumber == 9 )
+	{	// 광장에서는 거래를 할수 없다
+		GCServerMsgStringSend(lMsg.Get(711), aIndex, 1);
+		return;
+	}
+
+	- 메시지 추가 711 : 악마의 광장에서는 거래할수없습니다
+
+  ▩ 공격 성공율 공식 변동 
+  (user.cpp) gObjAttack();
+  - 기존 
+  if( (rand()%(lpObj->Level*5+lpObj->Dexterity)) < lpTargetObj->m_SuccessfulBlocking) 
+
+  - 수정
+  if( (rand()%((lpObj->Level*5)+((lpObj->Dexterity*3)/2) + (lpObj->Strength/4))) < lpTargetObj->m_SuccessfulBlocking) 
+
+  ▩ 물리 공격력 수치 변경
+	void gObjCalCharacter(int aIndex)
+
+	- 기존
+	if( lpObj->Class == CLASS_ELF )
+	{
+		lpObj->m_AttackDamageMinRight = (lpObj->Dexterity+lpObj->Strength)/10;
+		lpObj->m_AttackDamageMaxRight = (lpObj->Dexterity+lpObj->Strength)/5;
+		lpObj->m_AttackDamageMinLeft  = (lpObj->Dexterity+lpObj->Strength)/10;
+		lpObj->m_AttackDamageMaxLeft  = (lpObj->Dexterity+lpObj->Strength)/5;
+		//LogAdd("error-(m_AttackDamageMinLeft2)[%s][%d]:%d",lpObj->Name, lpObj->Dexterity, lpObj->m_AttackDamageMinLeft);
+	}
+	else
+	{
+		lpObj->m_AttackDamageMinRight = lpObj->Strength/10;
+		lpObj->m_AttackDamageMaxRight = lpObj->Strength/5;
+		lpObj->m_AttackDamageMinLeft  = lpObj->Strength/10;
+		lpObj->m_AttackDamageMaxLeft  = lpObj->Strength/5;
+	}
+
+	- 수정
+    if( lpObj->Class == CLASS_ELF )
+	{
+		lpObj->m_AttackDamageMinRight = (lpObj->Dexterity+lpObj->Strength)/8;
+		lpObj->m_AttackDamageMaxRight = (lpObj->Dexterity+lpObj->Strength)/4;
+		lpObj->m_AttackDamageMinLeft  = (lpObj->Dexterity+lpObj->Strength)/8;
+		lpObj->m_AttackDamageMaxLeft  = (lpObj->Dexterity+lpObj->Strength)/4;
+		//LogAdd("error-(m_AttackDamageMinLeft2)[%s][%d]:%d",lpObj->Name, lpObj->Dexterity, lpObj->m_AttackDamageMinLeft);
+	}
+	else
+	{
+		lpObj->m_AttackDamageMinRight = lpObj->Strength/8;
+		lpObj->m_AttackDamageMaxRight = lpObj->Strength/4;
+		lpObj->m_AttackDamageMinLeft  = lpObj->Strength/8;
+		lpObj->m_AttackDamageMaxLeft  = lpObj->Strength/4;
+	}
+  ▩ 파티 경험치 분배시 셋트파티 경험치를 적용하는가?
+  void gObjExpParty(LPOBJECTSTRUCT lpObj, LPOBJECTSTRUCT lpTargetObj, int AttackDamage, int MSBFlag)
+	if( bApplaySetParty )
+	{	// 세트 경험치가 적용되면
+		if( viewplayer == 3 )	viewpercent = 160;
+		else if( viewplayer == 4 )	viewpercent = 180;
+		else if( viewplayer >= 5 )	viewpercent = 210;
+		else viewpercent = 120;
+	}
+	else
+	{
+		if( viewplayer == 3 )	viewpercent = 140;
+		else if( viewplayer == 4 )	viewpercent = 160;
+		else if( viewplayer >= 5 )	viewpercent = 180;
+		else viewpercent = 120;
+	}
+
+
+
+- 2003.02.12 (foguy)	
+  ▩ 캐릭터 정보 저장 시간 5분에서 10분으로 조정
+  (user.cpp) if( (GetTickCount()-lpObj->AutoSaveTime) > (1000*60*10) )
+
+  ▩ 아이템 저항력 계산안되던 문제 수정
+  (zzzItem.cpp)
+  기존 - 저항력 유무의 값이 적용됨 (최대 = 0 - 1 )
+  memcpy(m_Resistance,   p->Resistance,   MAX_RESISTANCE);
+
+	- 저항력은 아이템레벨로 계산됨 
+	for( int i = 0; i < MAX_RESISTANCE; i++)
+	{
+		m_Resistance[i] = p->Resistance[i]*m_Level;
+	}
+
+  ▩ 기사 스킬 설정시 베기 스킬이 남아 있던버그 
+  -- 마법 추가하는 코드에서 기사 스킬을 제외 할때의 조건에 베기(skill 23번)가 빠졌있었다.
+  (user.cpp) BOOL gObjSetCharacter(BYTE *lpdata, int aIndex)
+	for( n=0; n<MAX_MAGIC; n++)
+	{
+		itype = lpMsg->dbMagicList[n*3];
+		if( itype != 0xFF )
+		{
+			if( itype == 17 )
+			{
+				EnergyBall = 0;
+			}
+			if( (itype != 18) && (itype != 19) && (itype != 20) && 
+				(itype != 21) && (itype != 22) && (itype != 23) && (itype != 24) && (itype != 25))
+				gObjMagicAdd(lpObj, itype, (lpMsg->dbMagicList[(n*3)+1]&0x0F));
+		}
+	}
+
+  ▩ 마나 물약을 사용했을때 추가마력이 적용되지 않았다
+  ( protocol.cpp )
+    switch(citem->m_Type)
+	{
+	case MAKE_ITEMNUM(14,4):
+		tMana += (int)(gObj[aIndex].MaxMana+gObj[aIndex].AddMana)*20/100;
+		break;
+	case MAKE_ITEMNUM(14,5):
+		tMana += (int)(gObj[aIndex].MaxMana+gObj[aIndex].AddMana)*30/100;
+		break;
+	case MAKE_ITEMNUM(14,6):
+		tMana += (int)(gObj[aIndex].MaxMana+gObj[aIndex].AddMana)*40/100;
+		break;
+	}
+	gObj[aIndex].Mana += tMana;
+	if( gObj[aIndex].Mana > (gObj[aIndex].MaxMana+gObj[aIndex].AddMana)-1 ) gObj[aIndex].Mana = (gObj[aIndex].MaxMana+gObj[aIndex].AddMana);
+
+- 2003.02.11 (foguy)
+	
+  ▩ ItemAttribute에서 아이템정보를 가지고 있는 것들만 찾기 위해 수정
+  (ItemDef.h)
+	typedef struct
+	{
+		char Name[32];
+		bool HaveItemInfo;		// 아이템 정보를 가지고 있는가?
+		...	
+	} ITEM_ATTRIBUTE;
+  (zzzItem.cpp) 
+	BOOL IsItem(int item_num)
+	{
+		if( item_num < 0 || item_num >= MAX_ITEM )
+			return FALSE;
+
+		return ItemAttribute[item_num].HaveItemInfo;
+	}
+
+  ▩ 창고정보 로드 할때.. 비정상적인 아이템 정보가 추가되어 있다.. 체크 코드 추가
+  (DSProtocol.cpp) void DGGetWarehouseList(LPSDHP_GETWAREHOUSEDB_SAVE lpMsg)
+	if( !IsItem(itype) )
+	{
+		itype = -1;
+	}
+
+  ▩ 사랑의 열매 (올리브 가격 설정)
+	else  if(m_Type==ITEM_POTION+9)	// 술 
+	{
+		if( m_Level == 1 )
+		{	// 사랑의 열매(올리브)
+			Gold = 1000;
+		}
+	}
+  
+
+- 2003.02.09 (foguy)
+  ▩ 카오스조합 확률 버그 수정
+	- 사용자가 기존에 석을 발랐을때 아이템의 가격이 재설정 되지 않았다
+	- 석을 발랐을때 가격 재설정 코드 추가
+	( user.cpp ) 
+	BOOL gObjItemLevelUp(LPOBJECTSTRUCT lpObj, int source, int target);
+	BOOL gObjItemRandomLevelUp(LPOBJECTSTRUCT lpObj, int source, int target);
+	BOOL gObjItemRandomOption3Up(LPOBJECTSTRUCT lpObj, int source, int target);
+	- lpObj->pInventory[target].Value();
+
+- 2003.02.08 (foguy)
+  ▩ 메시지 추가 
+	703 : [악마의 광장] 문이 열렸습니다
+	704 : [악마의 광장] 문이 열리기 %d분전 
+	705 : %d분후 [악마의 광장] 이벤트가 시작 됩니다
+	706 : %d분후 [악마의 광장] 문이 닫힙니다
+	707 : [악마의 광장]이벤트가 시작되었습니다
+	708 : [악마의 광장] 문이 닫혔습니다. 늦으신 분들은 다음기회를 이용해주세요
+	709 : 실패하셨군요. 사냥점수는%d점이며 다음 기회에 다시 도전해보시기 바랍니다
+	710 : 카오스 조합중입니다
+
+  ▩ 인증서버와의 프로토콜 추가
+	(Sprodef.h)
+	//----------------------------------------------------------------------------
+	// [0x61] 인증서버에서 이벤트 시작 또는 종료를 알린다
+	//----------------------------------------------------------------------------
+	typedef struct 
+	{
+		PBMSG_HEAD	h;
+		BYTE		Event;			// 이벤트 번호
+		BYTE		Stat;			// 상태 0 : 종료 1 : 시작
+	} SDHP_EVENTCONTROL, *LPSDHP_EVENTCONTROL;
+	//----------------------------------------------------------------------------
+	// [0x62] 인증서버에서 Reload 설정을 알린다
+	//----------------------------------------------------------------------------
+	typedef struct 
+	{
+		PBMSG_HEAD	h;
+		BYTE		Option;			// 옵션 번호
+	} SDHP_OPTIONCONTROL, *LPSDHP_OPTIONCONTROL;
+
+	(SProtocol.cpp)
+	void JGPEventControl(LPSDHP_EVENTCONTROL lpMsg);	
+	void JGPOptionControl(LPSDHP_OPTIONCONTROL lpMsg)
+
+  ▩ 몬스터가 죽어서 아이템을 남길때(?) 이벤트 아이템처리 부분 따로 뺌..
+	(gObjMonster.cpp) gObjMonsterDieGiveItem();
+	// 이벤트 아이템 드랍을 설정한다
+	if( gEventMonsterItemDrop(lpObj, lpTargetObj) )
+		return;			
+  ▩ 사랑의 하트 이벤트 추가( 폭죽과 동일하게 처리, itembag도 폭죽과 같이 사용) 
+  (event.cpp)
+  CItemBag	*   HeartOfLoveItemBag;	// 사랑의 하트 이벤트	
+  void HeartOfLoveOpenEven(LPOBJECTSTRUCT lpObj);	// 사랑의 하트 생성
+	- 폭죽의 경우 해외쪽에서는 파티를 맺었을때만 떨어지지만, 하트는 파티는 제외됨
+
+  ▩ 카오스 조합 여러번 되는 버그 수정
+  (protocol.cpp) CGChaosBoxItemMixButtonClick();
+	- 아래 조건을 달고.
+	if( lpObj->ChaosLock == TRUE )
+	{
+		GCServerMsgStringSend("카오스 조합중입니다", lpObj->m_Index, 1);	
+		return;
+	}
+
+	: lpObj->ChaosLock의 해제는 조합실패시에는 함수가 끝날때 해제해주고, 조합이 성공했을때는
+	  카오스아이템이 만들어진후 카오스인벤이 초기화 된후에 해제한다
+
+- 2003.02.07 (foguy)
+  ▩ 솔져소환구슬 요구에너지 설정 추가
+	void CMagicDamage::Set(char *name, int skill, int damage, int rlevel, int mana, int dis, BYTE * ReqClass, int rEnergy)
+		--> (MagicDamage.cpp) else if( skill == 36 ) m_RequireEnergy[skill] = 300;
+  ▩ 혼석 나오는 확률 높임 (1/5 에서 1/4로)
+  (user.cpp) void gObjGiveItemSearch(LPOBJECTSTRUCT lpObj, int maxlevel)
+	if( type==12 && index==15 )
+	{
+		perc = rand()%4;
+	}
+
+	if( type==14 && index==17 )
+	{	// 악마의 눈
+		perc = rand()%4;
+	}
+
+	if( type==14 && index==18 )
+	{	// 악마의 열쇠
+		perc = rand()%5;
+	}
+
+  ▩ 클라이언트 마이너 버전 추가
+  (gamemain.cpp) char			szClientVersion[5] = {'0','0','0','0','0'};		// 게임서버에 접속 가능한 클라이언트 버젼
+	- ReadCommonServerInfo()
+		GetPrivateProfileString("GameServerInfo", "ClientExeVersion", "", szTemp, 8, szCommonlocIniFileName);
+  			
+		cvstr				= strtok(szTemp, ".");
+		szClientVersion[0]	= *cvstr;
+		
+		cvstr				= strtok(NULL, ".");
+		szClientVersion[1]	= *(cvstr);
+		szClientVersion[2]	= *(cvstr+1);
+
+		cvstr				= strtok(NULL, ".");
+		szClientVersion[3]	= *(cvstr);
+		szClientVersion[4]	= *(cvstr+1);
+   (protocol.cpp)
+   ==============================================================
+	void CSPJoinIdPassRequest(LPPMSG_IDPASS lpMsg, int aIndex)
+	{
+		BYTE serial[17];
+		char id[MAX_IDSTRING+1];
+
+		// 버젼 정보 체크
+		if( (lpMsg->CliVersion[0] != szClientVersion[0]) ||
+			(lpMsg->CliVersion[1] != szClientVersion[1]) ||
+			(lpMsg->CliVersion[2] != szClientVersion[2]) ||
+			(lpMsg->CliVersion[3] != szClientVersion[3]) ||
+			(lpMsg->CliVersion[4] != szClientVersion[4]) )
+		{
+			GCJoinResult(0x06, aIndex);
+			CloseClient ( aIndex );
+			return;
+		}
+
+	==============================================================
+	void SCPJoinResultSend( int aIndex, BYTE result )
+	{
+		PMSG_JOINRESULT	pResult;
+
+		memset(&pResult, 0, sizeof(pResult));
+		pResult.h.size     = sizeof(pResult);
+		pResult.h.c		   = PMHC_BYTE;
+		pResult.h.headcode = 0xF1;
+		pResult.scode      = 0x00;
+		pResult.result     = result;
+		pResult.NumberH    = HIBYTE(aIndex);
+		pResult.NumberL    = LOBYTE(aIndex);
+		pResult.CliVersion[0] = szClientVersion[0];
+		pResult.CliVersion[1] = szClientVersion[1];
+		pResult.CliVersion[2] = szClientVersion[2];
+		pResult.CliVersion[3] = szClientVersion[3];
+		pResult.CliVersion[4] = szClientVersion[4];
+    ==============================================================
+
+  ▩ 계정 아이템블럭 적용
+   (user.h) BYTE	m_cAccountItemBlock;		// 계정 아이템블럭인가?
+			} OBJECTSTRUCT, *LPOBJECTSTRUCT;
+
+	(protocol.cpp) 
+	if( lpObj->m_cAccountItemBlock )
+	{	// 계정아이템블럭..
+		lpObj->Penalty |= PENALTY_ACCOUNTITEMBLOCK;
+	}
+
+
+- 2003.02.04 (foguy)
+  ▩ 응답이상에서 사용하는 CloseClient 추가  
+  - (giocp.cpp) void ResponErrorCloseClient ( int index )
+  - (user.cpp) 응답이상
+	
+	if( (GetTickCount()-lpObj->ConnectCheckTime) > (1000*60) )	// 60초를 넘어가면 끊김으로 간주
+	{	
+		ResponErrorCloseClient(n);
+		//CloseClient(n);
+		LogAddTD(lMsg.Get(542), lpObj->m_Index, lpObj->AccountID, lpObj->Name, lpObj->Ip_addr);
+	}
+	
+	if( (GetTickCount()-lpObj->ConnectCheckTime) > (1000*30) )	// 30초를 넘어가면 끊김으로 간주
+	{	
+		ResponErrorCloseClient(n);
+		//CloseClient(n);
+		LogAddTD(lMsg.Get(543), lpObj->m_Index, lpObj->AccountID, lpObj->Name, lpObj->Ip_addr);
+	}
+
+- 2003.02.04 (foguy)
+  ▩ (protocol.cpp) 함수 추가
+    // 서버 명령어를 보낸다
+	void GCServerCmd(int aIndex, BYTE type, BYTE Cmd1, BYTE Cmd2);
+	// 악마의 광장열리기 전까지 남은 시간 전송
+	void GCReqDevilSquareRemainTime(LPPMSG_REQ_DEVILSQUARE_REMAINTIME lpMsg, int aIndex);
+	// 모든 사용자에게 메시지를 보낸다
+	void AllSendMsg(LPBYTE Msg, int size);
+	// 같은 맵에 잇는 사용자에게 메시지를 보낸다
+	void AllSendSameMapMsg(LPBYTE Msg, int size, BYTE mapnumber);
+
+  ▩ (ChaosBos.cpp)	악마의 광장용 함수 추가
+	// 악마의 광장 초대권을 받을수 있는 아이템만 올려져 있는지 체크
+	BOOL	CheckDevilSquareItem(LPOBJECTSTRUCT lpObj, int& eventitemcount);
+	// 데빌 스퀘어 믹스
+	BOOL	DevilSquareEventChaosMix(LPOBJECTSTRUCT lpObj, BOOL bCheckType);
+  ▩ (NpcTalk.cpp) 이벤트용 Npc말하기 추가 
+	로랜시아 경비병, 카오스 고블린, 카론, 물약파는 소녀, 데비아스 마법사, 데비아스 경비병, 
+	노리아 라라요정, 데비아스 술집마담
+
+
+- 2003.02.03 (SaemSong)
+  ▩ 파티원 생명바 보여주는 기능 추가
+  ▩ 접속자중 PC방/개인 접속 현황 보기 추가 
+     == (CLoginCount.cpp / CLoginCount.h)
+     gLCount 클래스를 두어 0 은 CERTIFYTYPE_ACCOUNT
+	                       1은  CERTIFYTYPE_IP 이다.
+	 일단은 종량업체도 PC방에 포함된다. 
+  ▩ (User.cpp) 마검사 헬멧이 없어 셋트 추가방어율 10% 적용 안되는 버그 수정
+     (마검사일 경우 헬멧은 체크 안했다)
+
+- 2003.02.03 (foguy)
+  ▩ 악마의 광장 초대권 가격 조정 150,000 ==> 120,000
+	(zzzitem.cpp) Value();
+
+
+- 2003.01.30 (saemsong)
+  ▩ (zzzitem.cpp)엑설런트 방패 생명력 추가인데 엑설런트 데미지를 적용되는 버그 수정
+     if( m_Type >= ITEM_SHIELD && m_Type < ITEM_HELM ) return 0;
+  ▩ (user.cpp)마법공격시 엑설런트 데미지 공격이 누적되어 최대값 이상이 나오던 버그 수정
+     -- 이전 --
+	 ad += damagemax-targetDefense;
+	 ad += damagemax*20/100;
+     -- 이후 --
+     ad  = damagemax-targetDefense;
+	 ad += damagemax*20/100;
+  ▩ (user.cpp) void gObjMagicAddEnergyCheckOnOff(int flag)
+     마법 추가시 에너지를 체크 할것인가 말것인가를 정한다.
+	 (마법 요구 에너지가 수정되었을 경우 서비스 재 시작시 사라지는 현상 방지위해)
+
+- 2003.01.28 (foguy)
+  ▩ (gamemain.cpp) void LoadItemBag(); 추가 (이벤트 아이템 가방 로그)
+  
+- 2003.01.27 (foguy)
+  ▩ 폭죽 한국에서는 파티제한 없고, 아틀란스 이하의 맵에서만 나오게 수정
+  ▩ 702 메시지 추가 : "유니리아를 타고 이동이 불가능한 지역 입니다"
+  ▩ 폭죽 이벤트 활성화 메뉴추가 (ETC==> FireCracker)
+  ▩ 악마의 광장 추가
+  ▩ 이벤트 NPC 카론 추가를 위해서 NPC 클래스 수치 낮춤
+   if( MonsterClass >= 239 ) ==> if( MonsterClass >= 237 )
+
+  ▩ 함정이 데미지를 안준다  (foguy)
+	(user.cpp) BOOL gObjAttack
+	// 미스 (Miss)
+		if( !skill )
+		{
+   
+
+
+- 2003.01.21 (saemsong)
+  ▩ 젠 없어지는 속도를 30초에서 10초로 수정 
+  ▩ 아이템 없어지는 속도를 5분에서 4분으로 수정
+  ▩ 게임내 옵션 저장 기능 추가
+  ▩ AccountCharacter 테이블에 CtlCode를 넣어 0x01 일 경우 아이템 드롭, 버리기,
+     팔기,카오스,거래 등이 안되나 창고는 사용할 수 있다
+    
+- 2003.01.13 (foguy)
+  ▩ 창고 복사 버그 (DSProtocol.cpp )
+	- void GJSetCharacterInfo(LPOBJECTSTRUCT lpObj, int aIndex)
+	if( lpObj->m_IfState.use > 0 && lpObj->m_IfState.type == I_WAREHOUSE ) 
+	{	// 창고가 열려 있을때는 창고도 저장한다
+		GDSetWarehouseList(aIndex);	
+	}
+
+- 2003.01.13 (foguy)
+  ▩ Teleport 할 때, 영역 및 맵 속성 체크 추가 
+	- (user.cpp) BOOL	gObjCheckTeleportArea(int aIndex, BYTE x, BYTE y);
+  ▩ 공격 및 마법공격을 할때 , 영역 및 맵속성 체크 추가
+    - (user.cpp) BOOL	gObjCheckAttackArea(int aIndex, int TarObjIndex);
+
+  ▩ 유효하지 않은 순간이동 사용시 로그 
+	"[계정명][캐릭터명] Try Teleport Not Move Area [X좌표, Y좌표]"
+  ▩ 유효하지 않은 공격(마법공격 포함)사용시 로그 
+	"[계정명][캐릭터명] Try Attack In Not Attack Area [X좌표, Y좌표]"
+
+  ▩ Packet Serial 추가
+	- (giocp.cpp) RecvDataParse() - 현재는 중국만 사용
+
+
+- 2003.01.13 
+  ▩ 마검사의 경우에는 레벨업 포인트가 7이므로 계속 Ability Point Error가 로그에 기록되므로
+	 수정 : gObjSetCharacter() (user.cpp)
+	if( lpObj->Class == CLASS_MAGUMSA )
+	{	// 마검사는 레벨업포인틀가 7이다
+		ori_point   = DCInfo.GetDefPoint(lpObj->Class)+((lpObj->Level-1)*7);
+	}
+	else
+	{
+		ori_point   = DCInfo.GetDefPoint(lpObj->Class)+((lpObj->Level-1)*5);
+	}
+
+- 2003.01.13 
+  ▩ 폭죽 이벤트 추가  
+	extern CItemBag	*   FireCrackerItemBag;	// 폭죽
+	- 행운의 상자 : level 0 -> 행운의 상자
+				    level 1 -> 성탄의 별
+					level 2 -> 폭죽
+	- 폭죽은 파티를 맺었을때만....
+
+  ▩ 추가 프로토콜
+// [0xF3][0x40] 서버 명령어 코드
+	typedef struct
+	{
+		PBMSG_HEAD	h;
+		BYTE		subcode;
+
+		BYTE		CmdType;		// 명령어 type 0 : 폭죽, 1 : 메시지 박스
+		
+		BYTE		X;				// 0 일때 x, y 좌표,   1일때, X가 메시지 번호
+		BYTE		Y;		
+	} PMSG_SERVERCMD, *LPPMSG_SERVERCMD;
+
+
+  ▩ commonserver.cfg 에 스크립트 추가 
+	- XMasEvent				= 1	; 크리스마스 이벤트 0 : 한다  1 : 안한다
+	- XMasEvent_StarOfXMasDropRate		= 2		; 크리스마스 이벤트 성탄의별 나올 확률 XMasEvent_StartOfXMasDropRate/10000
+												; 1 ~ 10000 사이의 값이 나와야된다 Default : 2/10000
+	- XMasEvent_ItemDropRateForStarOfXMas= 2	; 크리스마스 이벤트 성탄의별에서 아이템이 나올확률 XMasEvent_ItemDropRateForStarOfXMas/10
+												; 1 ~ 10사이의 값이 나와야된다 Default : 2/10
+
+	gFireCrackerEvent		= 1					; 폭죽 이벤트 0 : 한다  1 : 안한다  
+	gFireCrackerDropRate	= 2					; 폭죽 나올 확률 gFireCrackerDropRate/10000
+												; 1 ~ 10000 사이의 값이 나와야된다 Default : 2/10000		
+	g_ItemDropRateForgFireCracker = 2			;폭죽에서 아이템이 나올확률 g_ItemDropRateForgFireCracker/10
+												; 1 ~ 10사이의 값이 나와야된다 Default : 2/10
+
+- 2002.12.20
+  ▩ 새로운 암호화 모듈 추가	- 이상수
+    - (giocp.cpp) RecvDataParse() 
+	   CStreamPacketEngine_Server spe(spe.h)를 사용해서, 패킷 암호화 해독; (중국만 사용)
+
+
+- 2002.01.09 (zzzItem.cpp) int GetLevelItem()
+  ▩ 솔저 소환 안되는 버그 수정 
+     //if( callbead_level > 5 ) callbead_level = 5;
+	 if( callbead_level > 6 ) callbead_level = 6;
+
+- 2002.01.08
+  ▩ (zzzItem.cpp) void CItem::Value()
+	- int Type = m_Type/16; ==> 
+	  int Type = m_Type/MAX_ITEM_INDEX;
+
+	void CItem::convert()
+	if(m_DamageMax          > 0)
+	{
+      	if((Attribute2&63) > 0)
+		{
+			if( p->Level )
+				//m_DamageMax += m_DamageMax*25/p->Level+5;		: 기존 
+				m_DamageMax += m_DamageMin*25/p->Level+5;		: 수정
+		}
+		m_DamageMax          += m_Level*3;
+	}
+
+  ▩ - (0x15) 공격당한 캐릭터 '윽' 소리 안나는 부분 수정
+  (protocol.cpp) GCDamageSend();
+  -	if( MSBFlag )
+	{
+		//pResult.NumberH &= 0x1F;		: 기존 
+		//pResult.NumberH |= MSBFlag;
+
+		pResult.NumberH &= 0x7F;		: 수정
+		pResult.NumberH |= 0x80;		
+		if( (MSBFlag>>2 == 1) || (MSBFlag>>1 == 1))
+		{
+			LogAddL("0x40");
+		}
+	}
+============================================================
+
+  ▩ 700, 701 메시지 추가
+     "파티제한 레벨은 %d 입니다. [%s:%d]-[%s:%d]"
+  ▩ 1600, 1601 이벤트 메시지 추가 "[%s]님 [%s] 당첨되었습니다. *축하드립니다*"
+  ▩ 석궁(세인트크로스석궁) 화살 안다는 버그 수정
+  ▩ 마검사 마법 공격시 지팡이 들었을때만 무기 공격력 추가되게 수정
+  ▩ 길드 최대 인원 25명에서 레벨/10 으로 수정
+	(GuildClass.h : MAX_GUILD				(MAX_LEVEL/10)			// 길드의 최대 인원 수)
+  ▩ 블럭된 캐릭터도 상점에서 아이템 구매가 가능하게 수정
+
+- 2002.12.31 
+  ▩ 변신반지 레벨 0 으로 되어 있어서 드롭되지 않았씀 (수정)
+  
+
+- 2002.12.30 ( 0.83.01 / uzbv(*40dK9ekN2n )
+  ▩ 504 메시지 수정 "[%s][%s]SI[%d,%s,%d,%d,%d,%d]serial:[%d] dur:[%d] Ex:[%d,%d,%d,%d,%d,%d,%d]"
+  ▩ 506 메시지 수정 "[%s][%s] SW [%d,%s,%d,%d,%d,%d]serial:[%d] dur:[%d] Ex:[%d,%d,%d,%d,%d,%d,%d]"
+  ▩ 485 메시지 수정 "[%s][%s] Shop Item Sell Money:%d %s:%d/%d/%d/%d/%d Ex:[%d,%d,%d,%d,%d,%d,%d]"
+  ▩ 477 메시지 수정 "[%s][%s][%d]%d/%d Get   serial:%d [%s][%d][%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d]"
+  ▩ 479 메시지 수정 "[%s][%s][%d]%d/%d Throw away Serial:%d [%s][%d][%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d]"
+  ▩ 480 메시지 수정 "[%s][%s][%d]%d/%d Throw away (Drop) Serial:%d [%s][%d][%d][%d][%d][%d] Ex:[%d,%d,%d,%d,%d,%d,%d]"
+  ▩ Item load 부분 수정
+  수정된 파일들
+	-) Monster.txt
+	-) Terrain9.att
+	-) Item(Kor).txt  
+
+- 2002.12.20 ( 0.81.02 / szbv(*40dK9ekN2n )
+  ▩ 엘설런트 아이템 추가및 아이템 index 16에서 32로 확장
+  ▩ iocp 쪽 버그 수정 (응답이상 및 서버 다운 감소)
+  ▩ 576 메시지 추가 "[%s][%s] 생명의보석 바르기전 : [%s]serial:[%d][%d]"
+  ▩ 577 메시지 추가 "[%s][%s] 생명의보석 바른 후  : [%s]serial:[%d][%d]"
+  
+  수정된 파일들
+     -) gate.txt 새로운 월드 추가
+     -) Item.txt 몬스터에서 떨어질 아이템과 그렇지 않은 아이템 옵션 추가
+     -) Item.txt 새로운 옵션이 붙는지 안 붙는지 체크 추가
+     -) MonsterSetBase.txt 타르칸 몬스터 추가
+	 -) Monster.txt 타르칸 몬스터 추가, 소환 몬스터 추가
+	 -) Skill.txt 새로운 마법 추가
+	 -) Terrain9.att 맵 추가
+	 -) Commonloc.cfg 에서 ServerInfo.dat 로 NonPK 옵션 이동
+	 -) message_kor.wtf 메시지들 추가
+
+
+  ▩ Giocp.cpp에서 검색하고 완료포트 열고 추가하는 방식으로 수정 
+  ▩ 2002-12-17
+	ClientIndex = gObjAddSearch(Accept, inet_ntoa(cInAddr));
+	if( ClientIndex == -1 ) 
+	{
+		closesocket(Accept);
+		LeaveCriticalSection(&criti);
+		LogAddL("error-L1 : ClientIndex = -1");
+		continue;
+	}	
+	if( UpdateCompletionPort(Accept, ClientIndex, TRUE) == FALSE )
+	{ 
+		closesocket(Accept);
+		LeaveCriticalSection(&criti);
+		LogAddL("error-L1 : %d %d CreateIoCompletionPort failed with error %d", Accept, ClientIndex, GetLastError());
+		continue;
+	}
+	if( gObjAdd(Accept, inet_ntoa(cInAddr), ClientIndex) == -1 )
+	{
+		closesocket(Accept);
+		LeaveCriticalSection(&criti);
+		LogAddL("error-L1 : %d %d gObjAdd() failed with error %d", Accept, ClientIndex, GetLastError());
+		continue;
+	}
+
+  ▩ 길드 삭제 버그 수정 ( 클라이언트에서 7 바이트 이외에 쓰레기 값이 들어옴 )
+  0x27 프로토콜 약간 수정 0xFE MaxMana 보냄 
+- 2002.12.12
+  대만 79.03 서버 버젼 보냄
+- 2002.12.11
+  중국 79.03 서버 버젼 보냄
+	
+- 2002.11.25 (0.78.01 / szbv(*40ds9lkN2n )
+  ▩ 프로토콜 중 0x41에 0x05 추가해야함
+  ▩ 프로토콜 중 0xF1 0x01 결과 중 0x11 추가 ( 15세 미만 접속 금지 ) 
+  ▩ 두손무기 들고 방패 드는 버그 수정
+  ▩ 스킬없는 무기가 스킬 사용 가능한 버그 수정 ( 상점을 이용함 )
+  ▩ 소환몬스터 정당방위 살인마 방법 < 소환 몬스터는 소환자가 공격 명령을 하지 않는 이상은 공격을 하지 않게 수정)
+  ▩ 기사,마검사의 경우 양손 무기가 같아야 10% 가산치 적용됨
+
+  
+- 2002.11.25 (0.78.01 / szbv(*40ds9lkN2n )
+  ▩ 파티시 얻는 총 경험치 수치 조절
+  ▩ 던전 2,3 층 레벨 제한 각각 40, 60
+  ▩ Commonloc.cfg 에 NonPK 옵션 추가 ( 이로써 PK 가 금지된 서버 가능 ) 
+  ▩ 캐릭터 아이템 블럭시 아이템 이동 불가 (인벤이동, 거래이동, 창고이동, 상점이동(사고/팔고), 카오스 이동, 버리기, 떨구기 안됨)
+  ▩ 캐릭터 블럭
+  ▩ 알려진 캐릭터가 아닐경우 접속 안됨
+
+
+- 2002.11.21 (0.77.01)
+  ▩ 접속서버에 사용자 수 보내는  버그 수정
+  ▩ 이벤트 몬스터한테서 떨어지는 아이템 로그 출력
+     (Event ItemDrop : Item:%d Level:%d op1:%d op2:%d op3:%d)
+  ▩ PMSG_GUILDDELUSER, PMSG_CHARDELETE 주민번호 변수 10자리로 고정
+
+  ▩ 중국측 요청에 의하여 하나의 IP에서 중복 접속 체크하는 부분을 뺐다.
+  ▩ MAX_LEVEL	을 350 까지 높임
+  ▩ cfg나 ini 파일이 존재하는지 체크 강화
+  ▩ 1153 메시지 추가 "%s님 요청으로 10초 후 경기가 자동으로 종료됩니다"
+  ▩ 1154 메시지 추가 "10초 후 경기가 자동으로 시작됩니다"
+
+  ▩ 사용자끼리 살인을 했을시엔 아이템 드롭 안되게 수정
+  ▩ 살인마 이상은 살인이 안됨
+  ▩ LogAdd("Experience : [%s][%s] %u %d", lpObj->AccountID, lpObj->Name, lpObj->Experience-addexp, addexp);
+  ▩ 이벤트 몬스터에서 떨어진 아이템도 먹자 방지 기능이 적용되게 수정
+  ▩ 중국 측 드래곤 습격 Text 깨진 부분 수정
+
+  ▩ 아틀란스 파티제한 없애기
+  ▩ 로스트타워3층 이동 되게 하기
+  ▩ 20021119-01 트랩 마법 보이게 하기
+  ▩ 20021119-02 50번 로스트타워 트랩 반경 2 타일 안의 캐릭터만 공격 받게 수정
+  
+- 2002.10.29 (0.74.03)
+  ▩ 배틀사커 수정중
+
+- 2002.10.20 (0.74.02)
+  ▩ PC방 정량 정보 잘못 출력되는 버그 수정
+     인증은 프로토콜이 12였는데 게임서버는 8이었다. 
+	 수정후 : char        EndsDays[12];     
+	 (SDHP_BILLSEARCH_RESULT)
+  ▩ LootingTime 변수를 commonserver.cfg 에서 commonloc.cfg 로 이동
+  
+
+- 2002.10.20 (0.74.01)
+  ▩ (SimpleModulus) 암호화 루틴 추가 (중요한 프로토콜에 한하여 암호화)
+	  SimpleModulus.Lib, SimpleModulus.h : (홍성민씨 라이브러리 제작)
+  ▩ 마법 사라지던 버그 수정
+  ▩ 캐릭터 삭제 버그 수정
+  ▩ 먹자 방지
+  ▩ 1152 메시지 추가 "이 아이템은 %s님 것이 아닙니다"
+  
+
+- 2002.10.13 (0.73.06)
+  ▩ commonserver.cfg 와 commonloc.cfg 두개로 분류, commonloc.cfg 는 각나라별로 잘 바뀌지 않는 설정을 지정한것이다.
+  ▩ 카오스박스를 이용한 복사법 방지
+  ▩ PartyMember(Count) : [CharName] [CharName] [CharName] [CharName] [CharName]
+     와 같이 파티 구성 멤버를 출력한다.
+  ▩ 1151 메시지 추가 "카오스박스를 닫은 후 종료하십시요"
+  ▩ LogAddL(""); 함수가 추가되었다. 이 함수는 내부접속( LOCALCONNECT == 1 ) 일때만 로그를 출력하게 된다.
+  ▩ 복사 아이템 일 경우 축/영석 바르기 안되게.. (에러 출력후 종료)
+
+- 2002.10.10 (0.73.04)
+//----------------------------------------------------------------------------
+// [0xF3][0x02] 캐릭터 삭제 요청
+//----------------------------------------------------------------------------
+typedef struct
+{
+	PBMSG_HEAD	h;
+	BYTE		subcode;
+	char		Name[MAX_IDSTRING];
+	//char		LastJoominNumber[8];
+	char		LastJoominNumber[10];
+} PMSG_CHARDELETE, *LPPMSG_CHARDELETE;
+
+//----------------------------------------------------------------------------
+// CS [0x53] 길드에서 제외 시킨다.
+//----------------------------------------------------------------------------
+typedef struct
+{
+	PBMSG_HEAD	h;
+	char		Name[MAX_IDSTRING];
+	//char		JoominNumber[7];
+	char		JoominNumber[10];
+} PMSG_GUILDDELUSER, *LPPMSG_GUILDDELUSER;
+
+
+	▩ 기존 LastJoominNumber[8]; , LastJoominNumber[7]; 이었던 것의 크기를 10으로 모두 바꿨씀.
+	   일단은 대만에 먼저 적용 하였다.  한국 쪽은 아직 적용 안됨!! (중요)
+
+- 2002.10.10 (0.73.03,04)
+	▩ CheckSum.dat 를 추가하여 클라이언트 main.exe 가 수정되었는지 체크하는 루틴이 추가되었다.
+
+
+- 2002.9.26 (0.72.01)
+	▩ 주민등록 번호 체크 각 나라마다 방식이 틀리게 수정
+	▩ PMSG_SERVERINFO 접속 서버에 보내는 게임서버 정보 중 UserCount 추가 (현재 접속자 수)
+	▩ 캐릭터 생성시 나 캐릭터 접속시 존재하지 않는 캐릭터 클래스 체크하여 접속 못하게 했다.
+
+
+- 2002.9.19 (0.71.02)
+	▩ MonsterSetbase.txt 수정  (걸치기 재 패치)
+
+
+- 2002.9.19 (0.70.01)
+	▩ 몬스터 습격이벤트 추가
+
+- 2002.8.21 (0.69.04)
+	▩ 거래나 파티 창이 뜬 상태에서 아이템줍기 안되는 버그 수정
+
+- 2002.8.20 (0.69.03)
+	▩  인벤토리의 날개 내구력을 무조건 255로 맞춘다. (다음 패치에 날개 내구력 패치 재 적용해야함)
+	▩  /요청 off 때 길전 신청도 안되게 수정
+
+- 2002.8.12 (0.69.02)
+	
+	▩  PK했을시 로그 기록 %s(죽인사용자) [Killed] %s(죽음당한 사용자)
+	▩  (DB서버 패치) 캐릭터 처음 생성시 무기 없는 버그 수정
+	▩  영석/축석/혼석 에는 옵션이나 스킬들이 안붙게..
+	▩  날개 내구력 깎이게 수정
+	▩  버그 : 카오스네이쳐보우는 화살 사용없이 나간다.
+	    Old : else if( (Left->m_Type >= (4<<4)) && (Left->m_Type <= (4<<4)+5) )	// 활을 착용하고 있다면..
+		New : else if( (Left->m_Type >= (4<<4)) && (Left->m_Type <= (4<<4)+6) )	// 활을 착용하고 있다면..
+
+- 2002.8.9 (0.69.01)
+	▩ 특정 사용자 프로토콜 추적 시스템 추가(2서버 패치)
+
+- 2002.8.8 (0.69)
+	
+
+- 2002.8.5 (0.68)
+	▩ 몬스터 다시 읽기할때 배열 처음부터 할당하게 수정 (gObjMonCount=0)
+	▩ ConMember.cpp : 접속 가능한 멤버 구성 가능하게 수정
+	▩ serverinfo.dat 에 다음 추가 
+	    ConnectMemberLoad	 = 1 ; 접속가능 멤버를 구성하여 다른 사람은 못들어 오게 한다. ConnectMember.txt 구성
+		                           이 옵션은 해당 서버만 영향을 받는다.
+
+	▩ 전체 공지 추가
+	1118 메시지 수정
+
+- 2002.7.20 (0.67)
+	▩ 창고나 거래, 혹은 상점등을 사용하면서 /이동 명령어 사용시 문제 수정
+
+- 2002.7.16 (0.66)
+	▩ Commonserver.cfg 에서 ItemFile = Item(Kor).txt 추가 
+	   이로써 아이템 파일을 구분해서 읽을수 있도록 하였다. 아이템 이름때문에..
+
+
+- 2002.7.10 (0.65)
+	▩ 마검사 이동 제한 레벨 버그 수정
+	▩ message_kor.wtf 파일 추가 및 수정
+	
+
+
+- 2002.7.8 (0.64)
+	▩ gCheckBattleGroundTimer() 함수에서 gBSGround[n]->m_BlueTeam 값의 NULL 참조 오류로 
+	   잠시 그냥 리턴하게 수정..
+
+- 2002.6.25 (0.61)
+	▩ 0x36 프로토콜 수정 
+
+	▩ 0xF3 0x04 프로토콜 수정 20020704-01
+	죽었다가 살아날때 Money 정보도 보내줌
+
+	▩ protocol.cpp 수정 20020703-02
+		로그에 Serial 추가  lpObj->pInventory[lpMsg->Pos].m_Number
+
+	▩ zzzitem.cpp 수정 20020703-01 
+		int Damage = m_DamageMin+m_DamageMax;
+		if(Damage > 0)
+		{
+			if(p->TwoHand)
+			{
+				Gold += 100+Damage*Damage*Damage*(30+m_AttackSpeed)/1000;
+			}
+			else
+			{
+				Gold += 100+Damage*Damage*Damage*(30+m_AttackSpeed)/700;
+			}
+		}
+		else
+		{
+			if(m_AttackSpeed> 0)
+				Gold += 100+m_AttackSpeed*m_AttackSpeed*m_AttackSpeed*2;
+		}
+		if(m_Defense > 0)
+      		Gold += 100+m_Defense     *m_Defense     *m_Defense;
+		if(m_MagicDefense > 0)
+			Gold += 100+m_MagicDefense*m_MagicDefense*m_MagicDefense;
+		if(m_WalkSpeed > 0)
+			Gold += 100+p->WalkSpeed    *p->WalkSpeed    *p->WalkSpeed;
+		if(m_SuccessfulBlocking > 0)
+			Gold += 100+m_SuccessfulBlocking*m_SuccessfulBlocking*m_SuccessfulBlocking;
+		
+	
+
+	▩ 0x24 프로토콜 수정 ( SitemFlag, TitemFlag 에 3 추가 )
+	 
+	▩ Giocp.cpp 수정 20020625-02
+	   gObjDestroy(Accept, ClientIndex);
+
+	▩ user.cpp 수정 20020625-01
+	   파티 맞었을때 플레이어수 만큼 경치 증가
+	if( viewplayer > 1 )
+	{
+		if( viewplayer == 3 )		viewpercent = 130;
+		else if( viewplayer == 4 )	viewpercent = 140;
+		else if( viewplayer >= 5 )	viewpercent = 150;
+		else						viewpercent = 120;
+		
+		partylevel = totallevel/viewplayer;
+	}
+	
+	//오리지날 -> viewpercent = 120;
+
+- 2001.5.14 (0.60) - 2001.6.4
+	▩ /이동 던전을 이용한 정당방위 해제 버그 수정
+	▩ /길드이동  명령어 추가 
+	▩ /거래 on /거래 off 기능추가
+	▩ 마법 사라지던 버그 수정
+	▩ 정당방위 버그 수정
+	▩ 거래 변신 반지 버그 수정
+	▩ 종료 0 에서 파티걸어 파티경치 얻는 버그 수정
+	
+
+- 2001.5.14 (0.57)
+	▩ 버전 6.5로 시리얼 F6을 s6으로
+	▩ 길드 관련 옵션 commonserver.cfg 에 추가
+		GuildCreate   = 0		// 0 이면 길드를 생성할 수 없다.
+		GuildDestroy  = 0		// 1 이면 길드를 삭제할 수 없다.
+	▩ 레벨40 이하 캐릭터 삭제 안되는 버그 수정
+	▩ ItemSerialCheck 아이템 시리얼(복사아이템) 체크 옵션 추가
+	▩ gAddExperience 몬스터에게 얻는 경험치 상승 옵션 추가 얻는 경험치에 곱하기 해준다. (소숫점 가능)
+	▩ 캐릭터도 없고 gCreateCharacter 가 0 이면 이벤트 서버로 알리면서 접속을 자동 종료 시킨다.
+	//▩ 로그 추가 LogAdd("획득 : [%s][%s] [%s] 경험치 : %d 얻음 위치 (%d / %d:%d)", lpObj->AccountID, lpObj->Name, lpTargetObj->Name, exp, lpObj->MapNumber, lpObj->X, lpObj->Y);
+	
+- 2001.5.14 (0.56)
+	▩ 레벨확장에서 버그 발생하여 DB 서버 패치
+
+
+- 2001.4.25 (0.54)
+	▩ [0xF3][0x03] 프로토콜 LevelUpPoint 1 Byte 에서 2 Byte로 수정
+	▩ [0xF3][0x05] 프로토콜 LevelUpPoint 1 Byte 에서 2 Byte로 수정
+	                        Level 1Byte 에서 2Byte로 수정
+	   - 레벨과 포인트업을 2바이트로 증가시켰다.
+	▩ 레벨을 298로 늘림
+	▩ 캐릭터 삭제 최소 레벨 옵션 설정 [CharacterDeleteMinLevel]
+	▩ 캐릭터 생성 가능 여부 옵션 [CreateCharacter]
+	▩ 접속 종료시 파티 요청 버그 수정
+
+
+
+- 2001.4.17 (0.53)
+	▩ 게임서버 영문화 기초 작업
+	▩ 거래 상태에서 아이템 줍고 거래 취소를 눌렀을때 아이템 증발 되던 버그 수정..
+	   거래 상태에서는 아이템을 주을수 없게..
+
+- 2001.4.3 - (0.51)
+	▩ 법사 순간 이동후 길드 정보 안보이는 버그 수정
+	▩ 길드 전쟁 안되던 버그 수정
+	▩ 요정이 소환한 몬스터에게 거래를 신청하면 몬스터가 캐릭을 공격하던 버그 수정
+	▩ 변신반지를 착용한 상태에서 죽음을 당해 아이템을 떨어트렸을때 변신반지가 그대로 적용되던 버그 수정
+	▩ 소환몬스터 안전지대에서도 공격받는점 공격 안받게 수정
+	▩ 마검사 이동 레벨 제한 2/3 옵션 적용 버그
+	▩ 아이템 날개파트중 구슬아이템과 섞여 착용이 가능하게 되던 버그 수정
+	
+    -- 내부적인 패치
+	▩ 인증서버 종량제 패치
+
+	▩ 마법리스트도 로그로 저장됨
+	▩ 아이템과 창고 로그 저장시 시간과 날자를 끝에 한번만 출력하게 수정(용량 줄이기 위해)
+	▩ 소환구슬 시리얼 표시
+	▩ 길드 정보 표시
+	▩ 축복과 영혼 바를 때 시리얼 넘버 나오고 계정과 캐릭터 이름도 나오게 수정
+	▩ 돈 거래시에도 계정 출력하게
+		
+- 2001.3.25 (0.46)
+	▩ 변신 반지 패치
+
+- 2001.3.13 - 3.21 (0.45)
+	▩ 게임내에서 ESC누른 후 나오는 [서버선택], [캐릭터선택] 을 누를때마다 카운터 다시 진행되던 버그 수정
+	▩ 창고에 1억 이상 입금 및 출금이 안되던 현상 수정
+	▩ 길드전 패배 후 아이템 떨구던 버그 수정
+	▩ 길드원이 주민번호 틀려도 길드 탈퇴 되던 버그 수정
+	▩ 아이템 드롭률 예전처럼 상승
+	▩ 양손검 체크
+	▩ 변신반지 추가
+	
+
+- 2001.3.2 - 3.12(0.44)
+	▩ 스킬사용할수 있는 클래스 체크 ( 기사가 요정 소환 마법사용 )
+	▩ 창고에 착용중인 아이템 맡겨도 다른 사람한테는 착용된것 처럼 보이는 버그 수정
+	▩ 발리(소환몹) 무적 버그 수정 ( 공격 체크중 몬스터 번호가 100번 넘어가면 NPC로 취급하여 발생 )
+	▩ DataServer 에서 아이디 생성이나 길드 생성시 이름을 체크하는 크래스 추가 (CBadSyntax, "badsyntax.txt")
+	
+	▩ 소환 몬스터끼리 싸우는 버그 수정
+	▩ m_SkillAttack 이 char 로 되어 있어서 오버플로우 현상이 생겨 공향이 적용 안되는 버그 수정 
+	▩ 러브 팡팡 하트 아이템 추가
+	▩ 방어스킬 50% 로 수정
+	
+
+- 2001.3.2 (0.43)
+	▩ 소환한 몬스터를 다른 사용자가 공격했을때도 정당방위 설정되도록 수정
+
+- 2001.2.26 - 3.1 (0.42)
+    ▩ 요정 소환마법 작업중..
+
+- 2001.2.26 (0.41)
+	▩ 거래시 물약 겹치기 후 창고 이용한 복사 차단
+
+- 2001.2.5 - 2.23 (0.40)	
+	▩ Commonserver.cfg 에 MonsterHp 항목을 추가하여 몬스터의 체력를 조절할수 있게 하였다.
+	▩ DataServer 로그 프린트에 약간의 버그 수정
+	▩ DataServer Guild Load 부분을 약간 수정하여 속도를 향상 시킴
+	▩ 게임접속시 과금 정보 자동 출력 기능 추가
+	▩ 인증서버 과금로그 기록 수정 (자동 테이블 증가 기록방식)
+	▩ 법사의 경우 에너지볼이 없다면 에너지볼 자동 추가
+	▩ 길드전중 적길드에게 죽었을때 아이템이 안떨어지게 수정
+	▩ 소환마법 작업중..
+	
+
+- 2001.1.30 - 2001.1.2.5(0.39)
+	▩ 일반인이 살인마한테 죽었을때 드롭시킬것인가 아닌가.. 0이면 아이템 안떨구고 1이면 떨군다.
+	▩ PKItemDrop = 0
+	▩ 방패스킬 버그 사용을 막음
+	▩ 거래 취소시 스킬 잔상 버그 수정
+	▩ 사용자 접속중에 다른 사용자가 인증을 요청하면 경고메시지 보냄 "다른사용자가 접속을 시도합니다"
+    ▩ 소환마법... 작업중
+	▩ 살인마도 창고를 사용할 수 있게 수정
+	▩ 법서 나올 확률 rand()%18 -> rand()%28 로 수정
+	▩ GJPBillCeckRecv() 함수에서 EndsDays를 뒤에 NULL문제 체크 안하고 인자로 넣어서 strcpy를 함으로 데이터가 꼬였을 가능성이 있다.
+	▩ 서버 과부하시 유저 재접속 하며 인증오류 수정..
+
+- 2001.1.19 (0.38)
+    ▩ 길드 특수문자 입력 안되게 수정
+	▩ 창고
+	▩ 로그 기록에서 버리기와 떨군 아이템을 구분할 수 있도록 버리기 뒤에 (Drop)을 추가했씀 예)버기기(Drop)
+
+- 2001.1.11 (0.37)
+	▩ 레벨이 안되는 상황에서 이동되는 버그 재 수정
+	▩ 거래시나 정당방위 설정 중에는 캐릭터 재접속이 안되게 수정
+	▩ 법사 순간 이동후 길드 정보 안보이던 버그 수정 
+	▩ 길드전시 법사 순간후 적 해제 되는 버그도 수정됨 
+	▩ 반지와 목걸이 체력 회복이 안되던 버그 수정
+	▩ 캐릭터 종료시 가지고 있던 아이템 저장하게.. (단 물약이나 희소성 아이템은 저장하지 않는다)
+	▩ 경험치 저장 (특정값 이상으로 경험치를 얻는 유저를 출력한다. ) "[id][name]Experience Overflow %d"
+
+- 2001.1.7 (0.36)
+	▩ 레벨 10이하의 요정이 로랜시아에 생성 되는 버그 수정
+	▩ 거래시 시리얼 번호 나오게 수정
+	▩ 거래시 다른캐릭터로 재접속할때 아이템 사라지는 버그 수정
+
+- 2001.1.4 (0.35)
+	▩ 죽었을때 프로토콜 안보낸던 버그 수정 ( 죽었을때 마을로 그냥 감)
+
+- 2001.12.31 (0.34)
+	▩ 기사 스킬 버그 수정 : 거래창을 띄운 상태에선 스킬이 삭제가 안되었다.
+
+- 2001.12.26 (0.33)
+	▩ 이동핵 방지 : 초당 맵 제한 레벨을 검사해서 제한레벨이 안될경우 다시 로랜시아 마을로 이동
+	▩ 물약핵 방지 : 상점에서 물품을 살수 있는 시간을 제한해서(3분) 그 이상일 경우 아이템을 살수 없다.
+	▩ 파티버그 수정 : 캐릭 종료시를 이용한 파티로 인해 혼자서 파티원 없이 파티경치를 얻는다.
+	▩ 몬스터 공격 안했던 것 (수정): monster.txt에 ViewRange(보이는 거리) 가 너무 짧아서 발생된 일
+	      또한 몬스터가 찾는 유저는 자신을 보는 유저로 수정 (이전은 자신이 보고 있는 유저만 검색하여 
+		  사각이 있었다)
+	▩ 순간이동 안되던 버그 수정 : 
+		
+
+- 2001.12.21 (0.32)
+	▩ 인벤토리에서 물약이 최대 3개까지 겹치게
+	▩ 상점 데이터에 내구력(개수) 추가
+	▩ 화살&석궁용 화살 아이템의 채우기 기능
+
+    ** Database server **
+	▩ 마검사 캐릭터 220까지 생성 가능하게..
+
+- 2001.12.17 (0.30)
+	▩ monster.txt 에 이벤트용 몬스터 추가
+
+- 2001.12.17 (0.29)
+	▩ 투명핵 ( 핵사용으로 맵 이동후 재접하여 마을귀한 쓰면 레벨이 안된다면서 모두에게 계속 안보이게됨 )
+	▩ 길드버그 ( 레벨 / 10 하여 최대 길드를 넘지 않았는데도 넘었다고 나오는 버그)
+	▩ 이동핵 ( 레벨이 안될경우 이동이 안되게..)
+
+
+- 2001.12.13
+	▩ 공지출력할때 로그 기록 하게  (누군가 운영자가 아닌데도 공지를 사용하고 있다)
+	▩ 헤더체크후 size가 0이면 끊어버린다.
+
+- 2001.12.9
+	▩ 몬스터 위치 이상 버그 수정 (맵에 끼거나 맵 밖으로 나가는 것)
+	▩ 거래시 취소가 될때 아이템 사라지는 부분 일부 수정
+	▩ 길드 삭제 버그 수정( 글자가 8자 이상일때 문자열 처리 이상으로 깨짐 발생 원인)
+	    길드 관련 버그는 저 문제인것 같아 일단 문자열 처리를 모두 손봄
+
+- 2001.10.29 
+	▩ 자기가 가지지 않은 마법을 핵을 사용해 0x1D, 0x1E 프로토콜을 보내게 한것을 수정했다..
+	▩ 파티시 경험치 분배부분에서 TotalLevel/TotalCount 로 나누는 바람에 가입한 유저를 전체로 레벨을
+	   계산하여 풀파버그가 생겼다.. 이름 TotalLevel/ViewPlayer (화면에 보이는 플레이어) 로 나누었다.
+	▩ 핵으로 인해 사용되는 마법을 막다가 다발스킬 안되던 버그 수정
+	▩
+
+
+
+
+

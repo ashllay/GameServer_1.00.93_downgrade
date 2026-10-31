@@ -1,0 +1,356 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{a4542a36-07e8-4383-bd96-d9a1d2536ded}</UniqueIdentifier>
+      <Extensions>cpp;c;cxx;rc;def;r;odl;idl;hpj;bat</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{09d23c45-a6d1-4873-807c-e482f5739f53}</UniqueIdentifier>
+      <Extensions>h;hpp;hxx;hm;inl</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{5ede7737-cd59-419b-b926-f5ff6b2f1fbb}</UniqueIdentifier>
+      <Extensions>ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe</Extensions>
+    </Filter>
+    <Filter Include="Protocol">
+      <UniqueIdentifier>{085c7238-0454-493a-b609-68ca302558fe}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Database">
+      <UniqueIdentifier>{36c4bf4b-7605-4037-b3f6-745d672bd4da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Database\CashItemPeriodSystem">
+      <UniqueIdentifier>{70cb454c-de99-4f40-ac26-dff546baf202}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ETC">
+      <UniqueIdentifier>{d23f403b-200e-4ae1-85e9-171547e67005}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ETC\로그출력">
+      <UniqueIdentifier>{f82a6eed-e3a3-4ff0-80bc-888e5f231dd6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ETC\MiniDump">
+      <UniqueIdentifier>{daae3c96-6d18-464f-b7ad-bde70dfbd392}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ETC\WinUtil">
+      <UniqueIdentifier>{7e7a01e9-2176-40c8-b040-62dfa6cd33de}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ETC\디렉토리관리">
+      <UniqueIdentifier>{fdf3e48e-0d30-4ba0-a110-7e9f7d6549cf}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="SOCKET">
+      <UniqueIdentifier>{5420ceae-90e6-4e54-ae81-f8f3bd4545b7}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MainApp">
+      <UniqueIdentifier>{c3993222-ca2d-422d-ba09-7fa75c4780e3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="MainApp\stdafx">
+      <UniqueIdentifier>{184f2c36-6508-4c53-bd48-ab88896b92da}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Define">
+      <UniqueIdentifier>{057bb1af-21fc-48c2-a744-4d87f153b76b}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ActiveMng.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BadSyntaxChk.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="BaseDAO.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ChildView.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="DelayHandler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\MuNameCheck.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="wsJoinServer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="WZIPCheck.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="WzItemSerial.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\WZScriptEncode.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\classdef.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\SetItemOption.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\WzMemScript.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\zzzitem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="ServerPrc.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="MapServerManager_DS.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="protocol.cpp">
+      <Filter>Protocol</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\AccountCharDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\CharPreviewDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\CrywolfDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\DBConBase.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\GSDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\MasterLevelSystemDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\OptionDbSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\QuestMonKillDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\QuestExpDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\PetDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\WarehouseDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\ItemExtDbSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\CastleDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\CharDBSet.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\PeriodItemExDBSet.cpp">
+      <Filter>Database\CashItemPeriodSystem</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\logproc.cpp">
+      <Filter>ETC\로그출력</Filter>
+    </ClCompile>
+    <ClCompile Include="LogToFile.cpp">
+      <Filter>ETC\로그출력</Filter>
+    </ClCompile>
+    <ClCompile Include="MiniDump.cpp">
+      <Filter>ETC\MiniDump</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\winutil.cpp">
+      <Filter>ETC\WinUtil</Filter>
+    </ClCompile>
+    <ClCompile Include="DirPath.cpp">
+      <Filter>ETC\디렉토리관리</Filter>
+    </ClCompile>
+    <ClCompile Include="giocp.cpp">
+      <Filter>SOCKET</Filter>
+    </ClCompile>
+    <ClCompile Include="WZQueue.cpp">
+      <Filter>SOCKET</Filter>
+    </ClCompile>
+    <ClCompile Include="..\common\MyWinsockBase.cpp">
+      <Filter>SOCKET</Filter>
+    </ClCompile>
+    <ClCompile Include="CQuery.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+    <ClCompile Include="MainFrm.cpp">
+      <Filter>MainApp</Filter>
+    </ClCompile>
+    <ClCompile Include="Dataserver.cpp">
+      <Filter>MainApp</Filter>
+    </ClCompile>
+    <ClCompile Include="StdAfx.cpp">
+      <Filter>MainApp\stdafx</Filter>
+    </ClCompile>
+    <ClCompile Include="DbSet\ZenEvenDb.cpp">
+      <Filter>Database</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ActiveMng.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BadSyntaxChk.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="BaseDAO.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ChildView.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DelayHandler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\MuNameCheck.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="wsJoinServer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WZIPCheck.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="WzItemSerial.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\WZScriptEncode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\classdef.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\SetItemOption.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\WzMemScript.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\zzzitem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\OptionDbSet.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ServerPrc.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MapServerManager_DS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\AccountCharDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\CharPreviewDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\CharDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\CastleDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\CrywolfDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\ItemExtDbSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\GSDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\DBConBase.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\MasterLevelSystemDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\QuestExpDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\QuestMonKillDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\WarehouseDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\PetDBSet.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="protocol.h">
+      <Filter>Protocol</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\PeriodItemExDBSet.h">
+      <Filter>Database\CashItemPeriodSystem</Filter>
+    </ClInclude>
+    <ClInclude Include="LogToFile.h">
+      <Filter>ETC\로그출력</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\logproc.h">
+      <Filter>ETC\로그출력</Filter>
+    </ClInclude>
+    <ClInclude Include="MiniDump.h">
+      <Filter>ETC\MiniDump</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\winutil.h">
+      <Filter>ETC\WinUtil</Filter>
+    </ClInclude>
+    <ClInclude Include="DirPath.h">
+      <Filter>ETC\디렉토리관리</Filter>
+    </ClInclude>
+    <ClInclude Include="giocp.h">
+      <Filter>SOCKET</Filter>
+    </ClInclude>
+    <ClInclude Include="..\common\MyWinsockBase.h">
+      <Filter>SOCKET</Filter>
+    </ClInclude>
+    <ClInclude Include="WZQueue.h">
+      <Filter>SOCKET</Filter>
+    </ClInclude>
+    <ClInclude Include="CQuery.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="Dataserver.h">
+      <Filter>MainApp</Filter>
+    </ClInclude>
+    <ClInclude Include="MainFrm.h">
+      <Filter>MainApp</Filter>
+    </ClInclude>
+    <ClInclude Include="StdAfx.h">
+      <Filter>MainApp\stdafx</Filter>
+    </ClInclude>
+    <ClInclude Include="DbSet\ZenEvenDb.h">
+      <Filter>Database</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\ProDef.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\Sprodef.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+    <ClInclude Include="..\include\define.h">
+      <Filter>Define</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="res\Dataserver.ico">
+      <Filter>Resource Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="res\Dataserver.rc2">
+      <Filter>Resource Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="res\DataserverDoc.ico">
+      <Filter>Resource Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="res\Toolbar.bmp">
+      <Filter>Resource Files</Filter>
+    </CustomBuild>
+    <CustomBuild Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Dataserver.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+</Project>

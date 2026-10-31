@@ -1,0 +1,212 @@
+//////////////////////////////////////////////////////////////////////////////
+// Patch_country.txt
+// 게임서버의 해외 패치상황 정리
+//                             			최종 업데이트 날자 : 2004년 01월 02일
+// Coder  : 송길섭(SaemSong)
+//          이상수(foguy)
+			황준일(b4nfter)
+
+		각나라의 패치파일 원본 소스는 source safe backup폴더에서
+		version.zip 으로 압축 되어 있습니다.
+		(패치로 인해 국내 상위버전 백업과 중복될 경우, 파일이름에 나라이름포함)
+
+		(예) version : 0.95.29 ==> 0.95.29.zip
+//////////////////////////////////////////////////////////////////////////////
+
+
+- 2004.01.02 (b4nfter)  
+  ▩ 중국
+	1. version : 0.96.34
+	2. 최종 패치일 : 2004년 01월 02패치			
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.24
+		ClientExeSerial		= b2ad7gZEea9a2Nlk
+	4. 블러드캐슬 로그 및 클라이언트 버그수정. 게임서버 기본인원 500 -> 400 으로 수정
+
+- 2003.12.04 (foguy)  
+  ▩ 대만
+  	1. version : 0.96.26
+	2. 최종 패치일 : 2003년 12월 04패치			
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.16
+		ClientExeSerial		= b2xGpGYfZa9a2NHc
+	4. 블러드 캐슬 패치
+
+- 2003.11.26 (foguy)  
+  ▩ 태국    
+	1. version : 0.95.24
+	2. 최종 패치일 : 2003년 11월 26패치			
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.95.09
+		ClientExeSerial		= 4zYGWbYagfZZEYHc
+	4. 아틀란스 오픈 및 스킬 붙히기 버그 수정
+
+- 2003.11.17 (foguy)  
+  ▩ 일본 
+  	1. version : 0.96.26
+	2. 최종 패치일 : 2003년 11월 11일 패치			
+	3. 사랑의묘약, 몬스터수치 원복을 위한 설정
+
+- 2003.11.14 (foguy)  
+  ▩ 태국    
+	1. version : 0.95.21
+	2. 최종 패치일 : 2003년 11월 14일 패치			
+	3. 서버만 패치 (파티로그뺌 _ 2서버군이 죽는 원인이 아닐가 의심됨)(중국이 이거때문에 서버가 죽고 있었음)
+
+  ▩ 중국 
+	1. version : 0.96.25
+	2. 최종 패치일 : 2003년 11월 14일 패치			
+	3. 투명망토+1 혼석 사용하지 않게 수정 (클라이언트와 맞지 않았음 서버는 혼석 사용하게, 클라이언트는 혼석 사용하지 않게)
+
+- 2003.11.12 (foguy)  
+  ▩ 대만
+	1. version : 0.95.30
+	2. 최종 패치일 : 2003년 11월 12일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.95.17
+		ClientExeSerial	= bQxkVgYeYf9wENHc
+	4. NONPK 서버 적용
+
+  ▩ 중국 
+	1. version : 0.96.24
+	2. 최종 패치일 : 2003년 11월 12일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.20
+		ClientExeSerial	= b2a87gYEZa9a2NHc
+	4. 환수 드래곤 등장시 황금 데르콘 출현과 충돌 되는 버그 수정
+
+
+- 2003.11.11 (foguy)  
+  ▩ 중국 
+	1. version : 0.96.23
+	2. 최종 패치일 : 2003년 11월 11일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.20
+		ClientExeSerial	= b2a87gYEZa9a2NHc
+	4. 서버 버그 패치 및 블러드 캐슬 버전 본섭 패치
+
+  ▩ 태국
+	1. version : 0.95.20
+	2. 최종 패치일 : 2003년 11월 11일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.95.08
+		ClientExeSerial		= 4zYGWbYagf9ZEYHc
+	4. 아틀란스 오픈
+
+- 2003.11.10 (foguy)  
+  ▩ 중국 (클라이언트 패치)    	
+	2. 최종 패치일 : 2003년 11월 10일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.18
+		ClientExeSerial		= b2a87gYfZa9a2NHc
+	4. 클라이언트 버그 패치
+
+
+- 2003.11.04 (foguy)  
+  ▩ 일본 
+  	1. version : 0.96.19
+	2. 최종 패치일 : 2003년 11월 05일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.17
+		ClientExeSerial		= b2xGpAYfAa9a2NHc
+	4. 버그 수정 (스킬 붙히기 버그)
+
+- 2003.11.04 (foguy)  
+  ▩ 글로벌 
+  	1. version : 0.95.19
+	2. 최종 패치일 : 2003년 11월 04일 패치		
+	3. 클라이언트 버전
+		- ClientExeVersion	= 0.95.09
+		- ClientExeSerial		= 4zYGWgYg5f9ZENHc
+	4. 버그 수정 (스킬 붙히기 버그)
+
+- 2003.10.30 (foguy)  
+  ▩ 중국 
+	1. version : 0.96.17
+	2. 최종 패치일 : 2003년 10월 30일 패치		
+	3. 클라이언트 버전
+		- ClientExeVersion	= 0.96.12
+		- ClientExeSerial	= b2xGpgYfka9aWNHc
+	4. 버그 수정(글씨 깨지는 부분) 및 스톤/사랑의묘약/천공의상자 이벤트 종료
+
+- 2003.10.29 (foguy)  
+  ▩ 일본 
+  	1. version : 0.96.17
+	2. 최종 패치일 : 2003년 10월 29일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.96.17
+		ClientExeSerial		= b2xGpAYfAa9a2NHc
+	4. 버그 수정 (황금 데르콘 출현시'☆'깨지는것)
+
+- 2003.10.17 (foguy)  
+  ▩ 태국 
+	1. version : 0.95.17
+	2. 최종 패치일 : 2003년 10월 17일 패치		
+	3. 클라이언트 버전
+		ClientExeVersion	= 0.95.07
+		ClientExeSerial		= 4zYGWbYagf9ZEaHc
+	4. NonPK서버 기능 추가
+
+- 2003.10.16 (foguy)  
+  ▩ 일본
+  (테스트)
+	1. version : 0.94.44
+	2. 최종 패치일 : 2003년 10월 16일 패치	
+	3. 변신반지 드롭 추가
+
+- 2003.10.13 (foguy)  
+  ▩ 중국
+  (본섭)	- 천공 2차버전
+	1. version : 0.95.29 
+	2. 최종 패치일 : 2003년 10월 10일 패치
+	3. 클라이언트 버전
+		- ClientExeVersion	= 0.95.18
+		- ClientExeSerial	= bQx3VgYwxf9aENHc
+	4. 기타
+		- 천공 2차버전
+
+  (테스트)	
+	1. version : 0.96.12
+	2. 최종 패치일 : 2003년 9월 23일 패치
+	3. 클라이언트 버전
+		- ClientExeVersion	= 0.96.12
+		- ClientExeSerial	= b2xGpgYfka9aWNHc
+	4. 기타
+		- 블러드 캐슬
+
+  ▩ 일본
+  (본섭)
+	1. version : 0.94.43
+	2. 최종 패치일 : 2003년 9월 22일 패치
+	3. 클라이언트 버전
+		- ClientExeVersion	= 0.94.11
+		- ClientExeSerial	= uWYMBARDhuAeSN2i			
+
+	
+  ▩ 글로벌
+  (본섭)
+	1. version : 0.95.13
+	2. 최종 패치일 : 2003년 9월 30일 패치
+	3. 클라이언트 버전
+		- ClientExeVersion	= 0.95.04
+		- ClientExeSerial	= 4zYGWgYggf9ZENHc
+	
+
+  ▩ 대만
+  (본섭)
+	version : 0.95.26
+	최종 패치일 : 2003년 9월 17일 패치
+	클라이언트 버전
+		- ClientExeVersion	= 0.95.14
+		- ClientExeSerial	= bQxkVgYeYf9aENHc
+
+  ▩ 태국
+  (본섭)
+	version : 0.95.17
+	최종 패치일 : 2003년 10월 10일 패치
+	클라이언트 버전
+		- ClientExeVersion	= 0.95.04
+		- ClientExeSerial	= 4zYGWgYagf9ZENHc
+
+
+
